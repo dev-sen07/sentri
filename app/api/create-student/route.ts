@@ -10,10 +10,14 @@ const supabaseAdmin = createClient(
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { nombre, apellido, ci, ru, correo, password } = body
+    const { nombre, apellido, ci, ru, correo, password, paralelo } = body
 
-    if (!nombre || !apellido || !ci || !ru || !correo || !password) {
+    if (!nombre || !apellido || !ci || !ru || !correo || !password || !paralelo) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
+    }
+
+    if (!['A', 'B', 'C'].includes(paralelo)) {
+      return NextResponse.json({ error: 'El paralelo debe ser A, B o C' }, { status: 400 })
     }
 
     // 1. Create the user in Auth
@@ -52,6 +56,7 @@ export async function POST(request: Request) {
         ci,
         ru,
         correo,
+        paralelo,
       }
     ])
 

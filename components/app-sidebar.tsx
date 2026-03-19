@@ -3,12 +3,13 @@
 import * as React from 'react'
 import {
   Users,
-  UserPlus,
   CheckSquare,
   History,
   LayoutDashboard,
   User,
   LogOut,
+  Code,
+  BookOpen,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -80,11 +81,6 @@ export function AppSidebar() {
         icon: Users,
       },
       {
-        title: 'Registrar Estudiante',
-        url: '/registrar-estudiante',
-        icon: UserPlus,
-      },
-      {
         title: 'Marcar Asistencia',
         url: '/marcar-asistencia',
         icon: CheckSquare,
@@ -94,6 +90,16 @@ export function AppSidebar() {
         url: '/ver-asistencias',
         icon: History,
       },
+      {
+        title: 'Ver Prácticas',
+        url: '/practicas',
+        icon: BookOpen,
+      },
+      {
+        title: 'Crear Práctica',
+        url: '/crear-practica',
+        icon: Code,
+      },
     ]
 
     const estudianteNav = [
@@ -101,6 +107,11 @@ export function AppSidebar() {
         title: 'Mis Asistencias',
         url: '/mis-asistencias',
         icon: History,
+      },
+      {
+        title: 'Prácticas',
+        url: '/practicas',
+        icon: Code,
       },
       {
         title: 'Mi Perfil',

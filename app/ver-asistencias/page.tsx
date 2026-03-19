@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, AsistenciaRow } from '@/lib/supabase'
-import { Header } from '@/components/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -26,6 +25,7 @@ interface AsistenciaWithEstudiante extends AsistenciaRow {
   estudiantes?: {
     nombre: string
     apellido: string
+    paralelo?: string
   }
 }
 
@@ -69,7 +69,7 @@ export default function VerAsistenciasPage() {
           .select(
             `
             *,
-            estudiantes:estudiante_id(nombre, apellido)
+            estudiantes:estudiante_id(nombre, apellido, paralelo)
           `
           )
           .order('fecha', { ascending: false })
@@ -197,7 +197,7 @@ export default function VerAsistenciasPage() {
                       {filteredAsistencias.map((asistencia) => (
                         <TableRow key={asistencia.id}>
                           <TableCell className="font-medium">
-                            {asistencia.estudiantes?.apellido}, {asistencia.estudiantes?.nombre}
+                            {asistencia.estudiantes?.apellido}, {asistencia.estudiantes?.nombre} {asistencia.estudiantes?.paralelo ? `(Paralelo ${asistencia.estudiantes.paralelo})` : ''}
                           </TableCell>
                           <TableCell>
                             {new Date(asistencia.fecha).toLocaleDateString('es-ES')}

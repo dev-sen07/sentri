@@ -53,16 +53,7 @@ export function Header({ userRole, userName }: HeaderProps) {
               >
                 Estudiantes
               </Link>
-              <Link
-                href="/registrar-estudiante"
-                className={`text-sm transition ${
-                  pathname === '/registrar-estudiante'
-                    ? 'font-semibold text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Registrar Estudiante
-              </Link>
+
               <Link
                 href="/marcar-asistencia"
                 className={`text-sm transition ${
@@ -72,6 +63,16 @@ export function Header({ userRole, userName }: HeaderProps) {
                 }`}
               >
                 Marcar Asistencia
+              </Link>
+              <Link
+                href="/crear-practica"
+                className={`text-sm transition ${
+                  pathname === '/crear-practica'
+                    ? 'font-semibold text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Crear Práctica
               </Link>
             </nav>
           )}
@@ -97,6 +98,16 @@ export function Header({ userRole, userName }: HeaderProps) {
                 }`}
               >
                 Mis Asistencias
+              </Link>
+              <Link
+                href="/practicas"
+                className={`text-sm transition ${
+                  pathname?.startsWith('/practicas')
+                    ? 'font-semibold text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Prácticas
               </Link>
             </nav>
           )}

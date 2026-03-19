@@ -192,7 +192,7 @@ export default function MarcarAsistenciaPage() {
                         {selectedEstudiante
                           ? (() => {
                               const est = estudiantes.find((e) => e.id === selectedEstudiante)
-                              return est ? `${est.apellido}, ${est.nombre} (${est.ci || 'Sin CI'})` : "Seleccionar un estudiante..."
+                              return est ? `${est.apellido}, ${est.nombre} (${est.ci || 'Sin CI'}) - Par: ${est.paralelo || 'N/A'}` : "Seleccionar un estudiante..."
                             })()
                           : "Selecciona un estudiante..."}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -206,7 +206,7 @@ export default function MarcarAsistenciaPage() {
                           {estudiantes.map((est) => (
                             <CommandItem
                               key={est.id}
-                              value={`${est.nombre} ${est.apellido} ${est.ci || ''}`}
+                              value={`${est.nombre} ${est.apellido} ${est.ci || ''} ${est.paralelo || ''}`}
                               onSelect={() => {
                                 setSelectedEstudiante(est.id)
                                 setOpenEstudiante(false)
@@ -215,7 +215,7 @@ export default function MarcarAsistenciaPage() {
                               <Check
                                 className={`mr-2 h-4 w-4 ${selectedEstudiante === est.id ? "opacity-100" : "opacity-0"}`}
                               />
-                              {est.apellido}, {est.nombre} {est.ci ? `(${est.ci})` : ''}
+                              {est.apellido}, {est.nombre} {est.ci ? `(${est.ci})` : ''} - Par: {est.paralelo || 'N/A'}
                             </CommandItem>
                           ))}
                         </CommandGroup>

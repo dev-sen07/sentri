@@ -16,6 +16,7 @@ export type EstudianteRow = {
   ci: string
   ru: string
   correo: string
+  paralelo: 'A' | 'B' | 'C'
   user_id: string | null
 }
 
@@ -31,4 +32,22 @@ export type UsuarioRolRow = {
   id: string
   user_id: string
   rol: 'estudiante' | 'auxiliar'
+}
+
+export type PracticaRow = {
+  id: string
+  nombre: string
+  descripcion: string
+  resultado_esperado: string
+  paralelo: 'A' | 'B' | 'C'
+  creado_en: string
+}
+
+export type EntregaRow = {
+  id: string
+  practica_id: string
+  estudiante_id: string
+  codigo: string
+  nota: number
+  fecha_entrega: string
 }
