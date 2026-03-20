@@ -3,10 +3,88 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Header } from '@/components/header'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import {
+  Users, CheckSquare, History, Code, User, LayoutDashboard, BookOpen
+} from 'lucide-react'
+
+const AUXILIAR_CARDS = [
+  {
+    title: 'Estudiantes',
+    description: 'Ver y gestionar la lista de estudiantes registrados',
+    href: '/estudiantes',
+    icon: Users,
+    gradient: 'from-blue-500/20 to-indigo-500/10',
+    border: 'border-blue-200 dark:border-blue-900',
+    iconColor: 'text-blue-600 dark:text-blue-400',
+    iconBg: 'bg-blue-100 dark:bg-blue-900/40',
+  },
+  {
+    title: 'Marcar Asistencia',
+    description: 'Registrar la asistencia del día para los estudiantes',
+    href: '/marcar-asistencia',
+    icon: CheckSquare,
+    gradient: 'from-emerald-500/20 to-green-500/10',
+    border: 'border-emerald-200 dark:border-emerald-900',
+    iconColor: 'text-emerald-600 dark:text-emerald-400',
+    iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
+  },
+  {
+    title: 'Ver Asistencias',
+    description: 'Historial completo y estadísticas de asistencia',
+    href: '/ver-asistencias',
+    icon: History,
+    gradient: 'from-violet-500/20 to-purple-500/10',
+    border: 'border-violet-200 dark:border-violet-900',
+    iconColor: 'text-violet-600 dark:text-violet-400',
+    iconBg: 'bg-violet-100 dark:bg-violet-900/40',
+  },
+  {
+    title: 'Prácticas',
+    description: 'Gestionar ejercicios Python y revisar entregas',
+    href: '/practicas',
+    icon: BookOpen,
+    gradient: 'from-orange-500/20 to-amber-500/10',
+    border: 'border-orange-200 dark:border-orange-900',
+    iconColor: 'text-orange-600 dark:text-orange-400',
+    iconBg: 'bg-orange-100 dark:bg-orange-900/40',
+  },
+]
+
+const ESTUDIANTE_CARDS = [
+  {
+    title: 'Mis Asistencias',
+    description: 'Consulta tu historial de asistencia',
+    href: '/mis-asistencias',
+    icon: History,
+    gradient: 'from-violet-500/20 to-purple-500/10',
+    border: 'border-violet-200 dark:border-violet-900',
+    iconColor: 'text-violet-600 dark:text-violet-400',
+    iconBg: 'bg-violet-100 dark:bg-violet-900/40',
+  },
+  {
+    title: 'Prácticas',
+    description: 'Resuelve los ejercicios de programación asignados',
+    href: '/practicas',
+    icon: Code,
+    gradient: 'from-indigo-500/20 to-blue-500/10',
+    border: 'border-indigo-200 dark:border-indigo-900',
+    iconColor: 'text-indigo-600 dark:text-indigo-400',
+    iconBg: 'bg-indigo-100 dark:bg-indigo-900/40',
+  },
+  {
+    title: 'Mi Perfil',
+    description: 'Ver tu información personal y datos académicos',
+    href: '/mi-perfil',
+    icon: User,
+    gradient: 'from-pink-500/20 to-rose-500/10',
+    border: 'border-pink-200 dark:border-pink-900',
+    iconColor: 'text-pink-600 dark:text-pink-400',
+    iconBg: 'bg-pink-100 dark:bg-pink-900/40',
+  },
+]
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -15,146 +93,115 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkUser = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) { router.push('/login'); return }
 
-        if (!session) {
-          router.push('/login')
-          return
-        }
-
-        // Get user role
-        const { data: roleData, error: roleError } = await supabase
+        const { data: roleData } = await supabase
           .from('usuarios_roles')
           .select('rol')
           .eq('user_id', session.user.id)
           .single()
 
-        if (roleError) {
-          console.error('Error fetching user role:', roleError.message, roleError.details)
-        }
-
         if (roleData) {
-          setUserRole(roleData.rol as 'estudiante' | 'auxiliar')
-        }
-        console.log('Role data:', roleData)
+          const role = roleData.rol as 'estudiante' | 'auxiliar'
+          setUserRole(role)
 
-        setUserName(session.user.email?.split('@')[0] || 'Usuario')
+          if (role === 'estudiante') {
+            const { data: studentData } = await supabase
+              .from('estudiantes')
+              .select('nombre')
+              .eq('user_id', session.user.id)
+              .single()
+            if (studentData) {
+              setUserName(`${studentData.nombre}`)
+            } else {
+              // Fallback if student data not found for some reason
+              setUserName(session.user.email?.split('@')[0] || 'Estudiante')
+            }
+          } else if (role === 'auxiliar') {
+            setUserName('Docente / Auxiliar')
+          }
+        } else {
+          // Fallback if role data not found
+          setUserName(session.user.email?.split('@')[0] || 'Usuario')
+        }
         setLoading(false)
       } catch (error) {
         console.error('Error checking auth:', error)
         router.push('/login')
       }
     }
-
-    checkAuth()
+    checkUser()
   }, [router])
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Cargando...</p>
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <p className="text-muted-foreground animate-pulse">Cargando...</p>
+        </div>
       </div>
     )
   }
 
+  const cards = userRole === 'auxiliar' ? AUXILIAR_CARDS : ESTUDIANTE_CARDS
+
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid gap-6">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Bienvenido, {userName}
-            </h1>
-            <p className="text-muted-foreground mt-2">
-              {userRole === 'auxiliar'
-                ? 'Gestiona estudiantes y asistencias'
-                : 'Consulta tus registros de asistencia'}
-            </p>
+        <div className="grid gap-8">
+          {/* Hero / Welcome Banner */}
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-violet-600 to-indigo-700 p-8 text-white shadow-xl">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_oklch(0.90_0.10_310/0.25)_0%,_transparent_60%)]" />
+            <div className="relative">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2 bg-white/20 rounded-xl">
+                  <LayoutDashboard className="w-6 h-6" />
+                </div>
+                <span className="text-white/70 text-sm font-medium uppercase tracking-widest">Dashboard</span>
+              </div>
+              <h1 className="text-4xl font-bold mb-2">
+                ¡Hola, <span className="text-yellow-300">{userName}</span>! 👋
+              </h1>
+              <p className="text-white/80 text-lg">
+                {userRole === 'auxiliar'
+                  ? 'Gestiona estudiantes, asistencias y prácticas desde aquí.'
+                  : 'Consulta tus registros y resuelve las prácticas asignadas.'}
+              </p>
+              <div className="mt-4 inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium border border-white/30">
+                <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                {userRole === 'auxiliar' ? 'Auxiliar de Laboratorio' : 'Estudiante'}
+              </div>
+            </div>
           </div>
 
-          {userRole === 'auxiliar' && (
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Estudiantes</CardTitle>
-                  <CardDescription>Ver lista de estudiantes</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button asChild className="w-full">
-                    <Link href="/estudiantes">Acceder</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Registrar Estudiante</CardTitle>
-                  <CardDescription>Agregar nuevo estudiante</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button asChild className="w-full">
-                    <Link href="/registrar-estudiante">Acceder</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Marcar Asistencia</CardTitle>
-                  <CardDescription>Registrar asistencias</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button asChild className="w-full">
-                    <Link href="/marcar-asistencia">Acceder</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Ver Asistencias</CardTitle>
-                  <CardDescription>Historial de asistencias</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button asChild className="w-full">
-                    <Link href="/ver-asistencias">Acceder</Link>
-                  </Button>
-                </CardContent>
-              </Card>
+          {/* Navigation Cards */}
+          <div>
+            <h2 className="text-lg font-semibold mb-4 text-muted-foreground">Acceso Rápido</h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {cards.map((card) => (
+                <Link key={card.href} href={card.href}>
+                  <Card className={`group h-full transition-all duration-200 hover:shadow-lg hover:-translate-y-1 cursor-pointer bg-gradient-to-br ${card.gradient} ${card.border} border`}>
+                    <CardHeader className="pb-3">
+                      <div className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center mb-3 transition-transform duration-200 group-hover:scale-110`}>
+                        <card.icon className={`w-6 h-6 ${card.iconColor}`} />
+                      </div>
+                      <CardTitle className="text-base">{card.title}</CardTitle>
+                      <CardDescription className="text-sm">{card.description}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <Button variant="secondary" className="w-full font-medium text-sm" size="sm">
+                        Ir ahora →
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
             </div>
-          )}
-
-          {userRole === 'estudiante' && (
-            <div className="grid md:grid-cols-2 gap-4">
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Mis Asistencias</CardTitle>
-                  <CardDescription>Ver tus registros de asistencia</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button asChild className="w-full">
-                    <Link href="/mis-asistencias">Ver Asistencias</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">Mi Perfil</CardTitle>
-                  <CardDescription>Ver información personal</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button asChild className="w-full">
-                    <Link href="/mi-perfil">Ver Perfil</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+          </div>
         </div>
       </main>
     </div>

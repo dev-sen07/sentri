@@ -17,6 +17,7 @@ export type EstudianteRow = {
   ru: string
   correo: string
   paralelo: 'A' | 'B' | 'C'
+  codigo?: string | null
   user_id: string | null
 }
 
@@ -34,6 +35,26 @@ export type UsuarioRolRow = {
   rol: 'estudiante' | 'auxiliar'
 }
 
+export type VerificacionTipo =
+  | 'contiene_funcion'
+  | 'contiene_clase'
+  | 'usa_bucle_for'
+  | 'usa_bucle_while'
+  | 'usa_recursion'
+  | 'contiene_texto'
+  | 'no_contiene_texto'
+
+export type Verificacion = {
+  tipo: VerificacionTipo
+  valor?: string   // required for: contiene_funcion, contiene_clase, contiene_texto, no_contiene_texto
+  mensaje: string  // shown to student if check fails
+}
+
+export type PracticaConfiguracion = {
+  verificaciones: Verificacion[]
+  asistencia?: boolean
+}
+
 export type PracticaRow = {
   id: string
   nombre: string
@@ -41,6 +62,8 @@ export type PracticaRow = {
   resultado_esperado: string
   paralelo: 'A' | 'B' | 'C'
   creado_en: string
+  fecha_limite?: string | null       // ISO string from Supabase
+  configuracion?: PracticaConfiguracion | null
 }
 
 export type EntregaRow = {
