@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Papa from 'papaparse'
 import { supabase, EstudianteRow } from '@/lib/supabase'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -51,6 +52,12 @@ export default function EstudiantesPage() {
   const [loadingRegistrar, setLoadingRegistrar] = useState(false)
   const [errorRegistrar, setErrorRegistrar] = useState<string | null>(null)
   const [successRegistrar, setSuccessRegistrar] = useState(false)
+
+  // CSV Import states
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [importing, setImporting] = useState(false)
+  const [importProgress, setImportProgress] = useState({ total: 0, current: 0, success: 0, errors: 0 })
+  const [importResult, setImportResult] = useState<{ errors: Array<{ row: number, message: string }> } | null>(null)
 
   const fetchEstudiantesData = async () => {
     const { data: estudiantesData, error } = await supabase
@@ -168,6 +175,74 @@ export default function EstudiantesPage() {
     }
   }
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setImporting(true)
+    setImportResult(null)
+    setImportProgress({ total: 0, current: 0, success: 0, errors: 0 })
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (h) => h.trim().toLowerCase(),
+      transform: (value) => typeof value === 'string' ? value.trim() : value,
+      complete: async (results) => {
+        const rows = results.data as Record<string, string>[]
+        setImportProgress(prev => ({ ...prev, total: rows.length }))
+        
+        let successCount = 0
+        let errorCount = 0
+        const importErrors: Array<{ row: number, message: string }> = []
+
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i]
+          try {
+            if (!row.nombre || !row.apellido || !row.ci || !row.ru || !row.correo || !row.paralelo) {
+              throw new Error('Faltan campos requeridos')
+            }
+
+            const response = await fetch('/api/create-student', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...row,
+                password: row.ci,
+              }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+              throw new Error(data.error || 'Error al registrar estudiante')
+            }
+
+            successCount++
+          } catch (err) {
+            errorCount++
+            importErrors.push({ row: i + 1, message: err instanceof Error ? err.message : 'Error desconocido' })
+          } finally {
+            setImportProgress(prev => ({ ...prev, current: i + 1, success: successCount, errors: errorCount }))
+          }
+        }
+
+        await fetchEstudiantesData()
+        setImportResult({ errors: importErrors })
+        setImporting(false)
+        
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+      },
+      error: (error) => {
+        console.error('Error parsing CSV', error)
+        setImporting(false)
+      }
+    })
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -180,7 +255,7 @@ export default function EstudiantesPage() {
     <div className="min-h-screen bg-background">
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid gap-6">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-start sm:items-center flex-col sm:flex-row gap-4">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Estudiantes</h1>
               <p className="text-muted-foreground mt-2">
@@ -188,10 +263,25 @@ export default function EstudiantesPage() {
               </p>
             </div>
             
-            <Dialog open={openModal} onOpenChange={setOpenModal}>
-              <DialogTrigger asChild>
-                <Button>Agregar Estudiante</Button>
-              </DialogTrigger>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <input 
+                type="file" 
+                accept=".csv" 
+                className="hidden" 
+                ref={fileInputRef} 
+                onChange={handleFileUpload} 
+              />
+              <Button 
+                variant="outline" 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+              >
+                {importing ? `Importando (${importProgress.current}/${importProgress.total})` : 'Importar CSV'}
+              </Button>
+              <Dialog open={openModal} onOpenChange={setOpenModal}>
+                <DialogTrigger asChild>
+                  <Button disabled={importing}>Agregar Estudiante</Button>
+                </DialogTrigger>
               <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Registrar Estudiante</DialogTitle>
@@ -259,7 +349,31 @@ export default function EstudiantesPage() {
                 </form>
               </DialogContent>
             </Dialog>
+            </div>
           </div>
+          
+          {importResult && (
+            <Card className={importResult.errors.length > 0 ? "border-amber-500" : "border-green-500"}>
+              <CardHeader className="py-3">
+                <CardTitle className="text-lg">Resultado de la importación</CardTitle>
+                <CardDescription>
+                  Se procesaron {importProgress.total} registros. Exitosos: <span className="text-green-600 font-bold">{importProgress.success}</span>. Errores: <span className="text-destructive font-bold">{importProgress.errors}</span>.
+                </CardDescription>
+              </CardHeader>
+              {importResult.errors.length > 0 && (
+                <CardContent>
+                  <div className="bg-destructive/10 text-destructive text-sm p-4 rounded-md max-h-40 overflow-y-auto">
+                    <p className="font-semibold mb-2">Errores detallados:</p>
+                    <ul className="list-disc pl-5 space-y-1">
+                      {importResult.errors.map((err, idx) => (
+                        <li key={idx}>Fila {err.row}: {err.message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
