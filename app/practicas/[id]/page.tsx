@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
   AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -16,8 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import Editor from '@monaco-editor/react'
-import Script from 'next/script'
-import { Play, CheckCircle, XCircle, Maximize2, Minimize2, Clock, AlertTriangle } from 'lucide-react'
+import { CheckCircle, XCircle, Maximize2, Minimize2, Clock, AlertTriangle } from 'lucide-react'
 
 // ─── Pure static verification engine (no Pyodide needed) ───────────────────────
 function verificarReglas(code: string, reglas: Verificacion[]): string | null {
@@ -60,15 +60,11 @@ function verificarReglas(code: string, reglas: Verificacion[]): string | null {
   return null // all passed
 }
 
-declare global {
-  interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    loadPyodide: () => Promise<any>
-    pyodideInstance: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      runPythonAsync: (code: string) => Promise<any>
-    }
-  }
+function normalizarCodigo(codigo: string) {
+  return codigo
+    .replace(/#.*$/gm, "") // quitar comentarios
+    .replace(/\s+/g, "")   // quitar espacios
+    .trim()
 }
 
 export default function ResolverPracticaPage({ params }: { params: Promise<{ id: string }> }) {
@@ -83,10 +79,9 @@ export default function ResolverPracticaPage({ params }: { params: Promise<{ id:
   const [codigo, setCodigo] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [evaluating, setEvaluating] = useState(false)
-  const [pyodideReady, setPyodideReady] = useState(false)
   const [resultadoTerminal, setResultadoTerminal] = useState<string>('')
   const [alertMessage, setAlertMessage] = useState<string | null>(null)
-  const [wrongOutputAlert, setWrongOutputAlert] = useState<{ actual: string; esperado: string } | null>(null)
+  const [previewAlert, setPreviewAlert] = useState<{ actual: string; esperado: string; esCorrecto: boolean } | null>(null)
   const [reglasAlert, setReglasAlert] = useState<string | null>(null)
   const [isExpired, setIsExpired] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -208,50 +203,9 @@ export default function ResolverPracticaPage({ params }: { params: Promise<{ id:
     }
   }
 
-  const initPyodide = async () => {
-    if (!window.pyodideInstance && window.loadPyodide) {
-      window.pyodideInstance = await window.loadPyodide()
-    }
-    setPyodideReady(true)
-  }
 
-  const ejecutarCodigo = async () => {
-    if (!window.pyodideInstance) return
-    if (evaluating) return
-    
-    setEvaluating(true)
-    setResultadoTerminal("Ejecutando código de forma segura en tu navegador...\n")
-
-    try {
-      await window.pyodideInstance.runPythonAsync(`
-import sys
-import io
-sys.stdout = io.StringIO()
-sys.stderr = io.StringIO()
-      `)
-
-      let executionError = ""
-      try {
-        await window.pyodideInstance.runPythonAsync(codigo)
-      } catch (err: unknown) {
-        executionError = err instanceof Error ? err.message : String(err)
-      }
-
-      const capturedStdout = await window.pyodideInstance.runPythonAsync(`sys.stdout.getvalue()`)
-      const capturedStderr = await window.pyodideInstance.runPythonAsync(`sys.stderr.getvalue()`)
-
-      const outputFinal = String(capturedStdout || '') + String(capturedStderr || '') + (executionError ? "\\nError: " + String(executionError) : "")
-      setResultadoTerminal(outputFinal)
-    } catch (err: unknown) {
-      console.error('Error ejecutando:', err)
-      setResultadoTerminal((prev) => prev + "\nError interno del motor Python.")
-    } finally {
-      setEvaluating(false)
-    }
-  }
 
   const evaluarYEnviar = async () => {
-    if (!window.pyodideInstance) return
     if (submissionLock.current) return
     if (entrega) return
     if (isExpired) {
@@ -277,40 +231,38 @@ sys.stderr = io.StringIO()
         }
       }
 
-      setResultadoTerminal('✅ Reglas verificadas. Ejecutando código...\n')
-      await window.pyodideInstance.runPythonAsync(`
-import sys
-import io
-sys.stdout = io.StringIO()
-sys.stderr = io.StringIO()
-      `)
+      setResultadoTerminal('✅ Reglas verificadas. Comparando código con la solución base...\n')
 
-      let executionError = ""
-      try {
-        await window.pyodideInstance.runPythonAsync(codigo)
-      } catch (err: unknown) {
-        executionError = err instanceof Error ? err.message : String(err)
+      // 4. Validate output structually — show preview dialog
+      const baseCodeInfo = practica?.codigo_base || ""
+      const normalizadoEstudiante = normalizarCodigo(codigo)
+      const normalizadoBase = normalizarCodigo(baseCodeInfo)
+      
+      const esCorrecto = normalizadoEstudiante === normalizadoBase
+
+      if (esCorrecto) {
+        setResultadoTerminal((prev) => prev + '✅ Código correcto estructuralmente. Confirma tu entrega.\n')
+      } else {
+        setResultadoTerminal((prev) => prev + '❌ El código no coincide con la estructura esperada.\n')
       }
 
-      const capturedStdout = await window.pyodideInstance.runPythonAsync(`sys.stdout.getvalue()`)
-      const capturedStderr = await window.pyodideInstance.runPythonAsync(`sys.stderr.getvalue()`)
+      setPreviewAlert({ actual: codigo, esperado: baseCodeInfo, esCorrecto })
+      
+    } catch (err: unknown) {
+      console.error('Error evaluando:', err)
+      setResultadoTerminal((prev) => prev + "\nError interno del servidor/navegador.")
+    } finally {
+      setEvaluating(false)
+      submissionLock.current = false // Liberamos el candado para permitir reintentos
+    }
+  }
 
-      const outputFinal = String(capturedStdout || '') + String(capturedStderr || '') + (executionError ? "\nError: " + String(executionError) : "")
-      setResultadoTerminal(outputFinal)
-
-      // 4. Validate output — BLOCK submission if it doesn't match exactly
-      const esperadoStr = practica!.resultado_esperado.trim()
-      const alumnoStr = String(capturedStdout || '').trim()
-      const esCorrecto = (esperadoStr === alumnoStr) && !executionError
-
-      if (!esCorrecto) {
-        // Show blocking dialog and do NOT save
-        setWrongOutputAlert({ actual: alumnoStr || '(sin salida)', esperado: esperadoStr })
-        submissionLock.current = false
-        setEvaluating(false)
-        return
-      }
-
+  const confirmarEntrega = async () => {
+    if (submissionLock.current) return
+    submissionLock.current = true
+    setEvaluating(true)
+    
+    try {
       if (estudianteId) {
         const notaToSend = (practica?.configuracion?.asistencia === true) ? 100 : null
 
@@ -328,10 +280,8 @@ sys.stderr = io.StringIO()
         if (insertError) throw insertError
         setEntrega(nuevaEntrega || { nota: notaToSend, codigo, fecha_entrega: new Date().toISOString() })
 
-        // Invalidate list cache to show "Entregada" immediately
         cacheClear(`entregas_${estudianteId}`)
 
-        // 6. Register attendance if enabled
         if (practica?.configuracion?.asistencia) {
           const nowInstance = new Date()
           const fechaStr = nowInstance.toISOString().split('T')[0]
@@ -346,14 +296,12 @@ sys.stderr = io.StringIO()
           
           if (attendanceError) {
             console.error('Error al registrar asistencia:', attendanceError)
-            const errorMsg = attendanceError.message || JSON.stringify(attendanceError)
-            setResultadoTerminal((prev) => prev + `\n❌ Error al registrar asistencia: ${errorMsg}`)
+            setResultadoTerminal((prev) => prev + `\n❌ Error al registrar asistencia: ${attendanceError.message}`)
           } else {
             setResultadoTerminal((prev) => prev + "\n✅ Asistencia registrada automáticamente.")
           }
         }
       } else {
-        // Auxiliar preview
         setEntrega({
           id: 'preview',
           practica_id: practicaId,
@@ -363,6 +311,7 @@ sys.stderr = io.StringIO()
           fecha_entrega: new Date().toISOString()
         } as unknown as EntregaRow)
       }
+      setPreviewAlert(null)
       
     } catch (err: unknown) {
       console.error('Error evaluando o enviando:', err)
@@ -390,10 +339,6 @@ sys.stderr = io.StringIO()
 
   return (
     <div className="min-h-screen bg-background">
-      <Script 
-        src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js" 
-        onLoad={initPyodide}
-      />
       <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="mb-6 flex space-x-4 items-center">
           <Button variant="outline" onClick={() => router.push('/practicas')}>
@@ -402,7 +347,7 @@ sys.stderr = io.StringIO()
           <h1 className="text-3xl font-bold tracking-tight">Resolución: {practica.nombre}</h1>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className={esModoLectura ? "flex flex-col gap-6" : "grid lg:grid-cols-3 gap-6"}>
           {/* Columna Izquierda: Instrucciones */}
           <div className="space-y-6">
             {/* Grade Result Card - shown after submission */}
@@ -429,20 +374,22 @@ sys.stderr = io.StringIO()
                     <p className="text-sm font-medium">
                       {entrega.nota === null 
                         ? '⏳ Práctica en revisión' 
-                        : (practica?.configuracion?.asistencia ? '✅ Práctica como asistencia' : '✅ Práctica calificada')}
+                        : (practica?.configuracion?.asistencia ? 'Práctica como asistencia' : 'Práctica calificada')}
                     </p>
                   </div>
                 </div>
                 <div className="text-center py-2">
-                  <span className={`text-6xl font-black ${
+
+                  <span className={`text-4xl font-black ${
                     entrega.nota === null ? 'text-blue-600 dark:text-blue-400'
                     : entrega.nota >= 80 ? 'text-emerald-600 dark:text-emerald-400'
                     : entrega.nota >= 50 ? 'text-yellow-600 dark:text-yellow-400'
                     : 'text-red-600 dark:text-red-400'
                   }`}>
-                    {entrega.nota ?? '—'}
+                    ASISTENCIA REGISTRADA
                   </span>
-                  <span className="text-2xl text-muted-foreground font-semibold">/100</span>
+                  
+
                 </div>
                 {practica?.configuracion?.asistencia && (
                   <div className="mt-2 text-center text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
@@ -455,6 +402,7 @@ sys.stderr = io.StringIO()
               </div>
             )}
 
+            {!esModoLectura && (
             <Card>
         <CardHeader className="pb-4">
           <CardTitle>Instrucciones de la Práctica</CardTitle>
@@ -508,22 +456,21 @@ sys.stderr = io.StringIO()
                 </div>
               </CardContent>
             </Card>
+            )}
 
             
           </div>
 
-          {/* Columna Derecha: Editor de Código */}
-          <Card className={`col-span-2 flex flex-col transition-all duration-300 bg-card ${
-            isFullscreen 
+          {/* Editores de Código */}
+          <div className={esModoLectura ? "grid lg:grid-cols-1 gap-6" : "col-span-2"}>
+          <Card className={`flex flex-col transition-all duration-300 bg-card ${
+            isFullscreen && !esModoLectura
               ? "fixed inset-0 z-50 w-screen h-screen rounded-none border-0" 
               : "h-[75vh] min-h-[600px] overflow-hidden"
           }`}>
             <CardHeader className="pb-3 border-b shrink-0 flex flex-row items-center justify-between">
-              <CardTitle className="text-sm">Editor de Código (Python)</CardTitle>
+              <CardTitle className="text-sm">{esModoLectura ? "Tu Código Enviado" : "Editor de Código (Python)"}</CardTitle>
               <div className="flex items-center space-x-3">
-                {!pyodideReady && !esModoLectura && (
-                  <span className="text-xs text-muted-foreground animate-pulse">Cargando motor Python...</span>
-                )}
                 <Button 
                   variant="ghost" 
                   size="icon" 
@@ -552,36 +499,12 @@ sys.stderr = io.StringIO()
                   }}
                 />
               </div>
-            {resultadoTerminal && (
-              <div className="border-t bg-black custom-scrollbar flex flex-col">
-                <div className="text-xs text-muted-foreground/80 px-4 py-1.5 bg-zinc-900 border-b border-zinc-800 flex justify-between items-center font-mono">
-                  <span>TERMINAL DE SALIDA</span>
-                  <button onClick={() => setResultadoTerminal('')} className="hover:text-white transition-colors" title="Limpiar terminal">✕</button>
-                </div>
-                <pre className="text-green-400 p-4 font-mono text-sm whitespace-pre-wrap overflow-y-auto max-h-[250px] min-h-[100px]">
-                  {resultadoTerminal}
-                </pre>
-              </div>
-            )}
             </CardContent>
             <CardFooter className="pt-3 border-t bg-muted/30 flex space-x-3 shrink-0">
-              {!esModoLectura && (
-                <Button 
-                  type="button"
-                  variant="secondary"
-                  className="w-1/2" 
-                  onClick={ejecutarCodigo}
-                  disabled={!pyodideReady || evaluating || !codigo.trim()}
-                >
-                  <Play className="w-4 h-4 mr-2" /> 
-                  {evaluating ? "Ejecutando..." : "Probar Código"}
-                </Button>
-              )}
-              
               <Button 
-                className={esModoLectura ? "w-full" : "w-1/2"} 
+                className={"w-full"} 
                 onClick={evaluarYEnviar}
-                disabled={!pyodideReady || esModoLectura || evaluating || !codigo.trim()}
+                disabled={esModoLectura || evaluating || !codigo.trim()}
               >
                 {evaluating ? (
                   "Enviando..."
@@ -595,6 +518,7 @@ sys.stderr = io.StringIO()
               </Button>
             </CardFooter>
           </Card>
+          </div>
         </div>
 
         <AlertDialog open={!!alertMessage} onOpenChange={(open) => !open && setAlertMessage(null)}>
@@ -609,30 +533,41 @@ sys.stderr = io.StringIO()
           </AlertDialogContent>
         </AlertDialog>
 
-        <AlertDialog open={!!wrongOutputAlert} onOpenChange={(open) => !open && setWrongOutputAlert(null)}>
-          <AlertDialogContent className="max-w-lg">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-                <XCircle className="w-5 h-5" /> Resultado incorrecto
+        <AlertDialog open={!!previewAlert} onOpenChange={(open) => !open && setPreviewAlert(null)}>
+          <AlertDialogContent className="w-[95vw] min-w-[70vw] max-w-5xl max-h-[90vh] flex flex-col p-4 md:p-6 overflow-hidden">
+            <AlertDialogHeader className="shrink-0 mb-2">
+              <AlertDialogTitle className={`flex items-center gap-2 ${previewAlert?.esCorrecto ? "text-emerald-600" : "text-destructive"}`}>
+                {previewAlert?.esCorrecto ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />} 
+                {previewAlert?.esCorrecto ? "¡Todo se ve bien!" : "Resultado incorrecto"}
               </AlertDialogTitle>
               <AlertDialogDescription asChild>
-                <div className="space-y-3 text-sm">
-                  <p>La salida de tu programa <strong>no coincide</strong> con el resultado esperado. Corrije tu código e inténtalo de nuevo.</p>
-                  <div className="grid grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Tu salida</p>
-                      <pre className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 p-2 rounded-md font-mono text-xs whitespace-pre-wrap break-all min-h-10">{wrongOutputAlert?.actual}</pre>
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Resultado esperado</p>
-                      <pre className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 p-2 rounded-md font-mono text-xs whitespace-pre-wrap break-all min-h-10">{wrongOutputAlert?.esperado}</pre>
-                    </div>
-                  </div>
+                <div className="text-sm">
+                  {previewAlert?.esCorrecto 
+                    ? <p>Tu código coincide con la estructura de la solución esperada. ¿Deseas entregar la práctica?</p>
+                    : <p>La estructura de tu programa <strong>no coincide</strong> con el código base. Corrije tu código e inténtalo de nuevo.</p>
+                  }
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogAction onClick={() => setWrongOutputAlert(null)}>Entendido, seguir intentando</AlertDialogAction>
+            <div className="grid md:grid-cols-2 gap-4 mt-3 p-3 bg-muted/20 border rounded-xl overflow-y-auto max-h-[60vh] ">
+              <div className="flex flex-col h-full min-h-[150px]">
+                <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide shrink-0">Tu código enviado</p>
+                <pre className={`flex-1 p-3 rounded-lg font-mono text-xs whitespace-pre-wrap break-all border ${previewAlert?.esCorrecto ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400" : "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"}`}>{previewAlert?.actual}</pre>
+              </div>
+              <div className="flex flex-col h-full min-h-[150px]">
+                <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide shrink-0">Solución (Código Base)</p>
+                <pre className="flex-1 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 p-3 rounded-lg font-mono text-xs whitespace-pre-wrap break-all">{previewAlert?.esperado}</pre>
+              </div>
+            </div>
+            <AlertDialogFooter className="shrink-0 mt-4 md:mt-6">
+              <AlertDialogCancel onClick={() => setPreviewAlert(null)}>
+                {previewAlert?.esCorrecto ? "Cancelar" : "Entendido, seguir intentando"}
+              </AlertDialogCancel>
+              {previewAlert?.esCorrecto && (
+                <AlertDialogAction onClick={confirmarEntrega} disabled={evaluating} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+                  {evaluating ? "Entregando..." : "Entregar Práctica"}
+                </AlertDialogAction>
+              )}
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

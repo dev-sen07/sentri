@@ -11,6 +11,7 @@ import {
   Code,
   BookOpen,
   Sparkles,
+  Video,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -87,11 +88,13 @@ export function AppSidebar() {
       { title: 'Marcar Asistencia', url: '/marcar-asistencia', icon: CheckSquare },
       { title: 'Ver Asistencias', url: '/ver-asistencias', icon: History },
       { title: 'Ver Prácticas', url: '/practicas', icon: BookOpen },
+      { title: 'Clases Grabadas', url: '/clases-grabadas', icon: Video },
     ]
 
     const estudianteNav = [
       { title: 'Mis Asistencias', url: '/mis-asistencias', icon: History },
       { title: 'Prácticas', url: '/practicas', icon: Code },
+      { title: 'Clases Grabadas', url: '/clases-grabadas', icon: Video },
       { title: 'Mi Perfil', url: '/mi-perfil', icon: User },
     ]
 

@@ -60,6 +60,7 @@ export type PracticaRow = {
   nombre: string
   descripcion: string
   resultado_esperado: string
+  codigo_base: string
   paralelo: 'A' | 'B' | 'C'
   creado_en: string
   fecha_limite?: string | null       // ISO string from Supabase
@@ -74,3 +75,12 @@ export type EntregaRow = {
   nota: number
   fecha_entrega: string
 }
+
+export type ClaseGrabadaRow = {
+  id: string
+  titulo: string
+  descripcion: string | null
+  url_video: string
+  creado_en: string
+}
+

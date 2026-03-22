@@ -78,6 +78,7 @@ export default function PracticasPage() {
     nombre: "",
     descripcion: "",
     resultado_esperado: "",
+    codigo_base: "",
     paralelos: [] as string[],
     fecha_limite: "",
     configuracion_json: "", // raw JSON string for the textarea
@@ -236,6 +237,7 @@ export default function PracticasPage() {
         nombre: pract.nombre,
         descripcion: pract.descripcion,
         resultado_esperado: pract.resultado_esperado,
+        codigo_base: pract.codigo_base || "",
         paralelos: [pract.paralelo], // Editing only updates the specific copy
         fecha_limite: pract.fecha_limite
           ? new Date(pract.fecha_limite).toISOString().slice(0, 16)
@@ -256,6 +258,7 @@ export default function PracticasPage() {
       nombre: "",
       descripcion: "",
       resultado_esperado: "",
+      codigo_base: "",
       paralelos: ["A"], // Default checked
       fecha_limite: "",
       configuracion_json: JSON.stringify({
@@ -277,7 +280,7 @@ export default function PracticasPage() {
     setFormError(null);
     setConfigError(null);
     try {
-      if (!formData.nombre || !formData.descripcion || !formData.resultado_esperado)
+      if (!formData.nombre || !formData.descripcion || !formData.resultado_esperado || !formData.codigo_base)
         throw new Error("Todos los campos requeridos deben estar completos");
 
       // Parse JSON config if provided
@@ -303,6 +306,7 @@ export default function PracticasPage() {
           nombre: formData.nombre,
           descripcion: formData.descripcion,
           resultado_esperado: formData.resultado_esperado,
+          codigo_base: formData.codigo_base,
           paralelo: formData.paralelos[0] || "A",
           fecha_limite: formData.fecha_limite ? new Date(formData.fecha_limite).toISOString() : null,
           configuracion: configuracion,
@@ -315,6 +319,7 @@ export default function PracticasPage() {
           nombre: formData.nombre,
           descripcion: formData.descripcion,
           resultado_esperado: formData.resultado_esperado,
+          codigo_base: formData.codigo_base,
           paralelo: pID,
           fecha_limite: formData.fecha_limite ? new Date(formData.fecha_limite).toISOString() : null,
           configuracion: configuracion,
@@ -795,6 +800,24 @@ export default function PracticasPage() {
                 />
                 <p className="text-xs text-muted-foreground">
                   El código deberá imprimir exactamente este valor con print(). Ojo con espacios y mayúsculas.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="codigo_base" className="text-sm font-medium">
+                  Código Base / Solución Exacta *
+                </label>
+                <Textarea
+                  id="codigo_base"
+                  placeholder="def funcion():&#10;    print('Hola Mundo')"
+                  rows={4}
+                  value={formData.codigo_base}
+                  onChange={(e) => setFormData((p) => ({ ...p, codigo_base: e.target.value }))}
+                  className="font-mono bg-muted"
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  El código del estudiante será validado estructuralmente contra este código (ignorando espacios y comentarios).
                 </p>
               </div>
 
