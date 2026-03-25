@@ -448,12 +448,12 @@ export default function ResolverPracticaPage({ params }: { params: Promise<{ id:
                   </p>
                 </div>
                 
-                <div>
+                {/* <div>
                   <h3 className="font-semibold text-sm mb-1">El resultado exacto de la consola debe ser:</h3>
                   <pre className="bg-muted p-3 rounded-md border font-mono text-sm whitespace-pre-wrap">
                     {practica.resultado_esperado}
                   </pre>
-                </div>
+                </div> */}
               </CardContent>
             </Card>
             )}
