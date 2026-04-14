@@ -82,7 +82,10 @@ export default function MiPerfilPage() {
           .eq("user_id", session.user.id)
           .single();
 
-        if (!roleData || (roleData.rol !== "estudiante" && roleData.rol !== "delegado")) {
+        if (
+          !roleData ||
+          (roleData.rol !== "estudiante" && roleData.rol !== "delegado")
+        ) {
           router.push("/dashboard");
           return;
         }
@@ -116,7 +119,10 @@ export default function MiPerfilPage() {
             .eq("estudiante_id", estudianteData.id);
 
           if (extrasData) {
-            const sumaExtras = extrasData.reduce((acc, curr) => acc + (Number(curr.puntos) || 0), 0);
+            const sumaExtras = extrasData.reduce(
+              (acc, curr) => acc + (Number(curr.puntos) || 0),
+              0,
+            );
             setPuntosExtra(sumaExtras);
           }
 
@@ -128,7 +134,9 @@ export default function MiPerfilPage() {
 
           if (actividadesData) {
             const sumaActividades = actividadesData.reduce((acc, curr) => {
-              const act = Array.isArray(curr.actividades) ? curr.actividades[0] : curr.actividades;
+              const act = Array.isArray(curr.actividades)
+                ? curr.actividades[0]
+                : curr.actividades;
               return acc + (Number(act?.ponderacion) || 0);
             }, 0);
             setPuntosActividades(sumaActividades);
@@ -163,13 +171,15 @@ export default function MiPerfilPage() {
     setPasswordLoading(true);
     try {
       // Validar contraseña actual
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session?.user?.email) {
         setPasswordError("No se pudo obtener la sesión actual.");
         setPasswordLoading(false);
         return;
       }
-      
+
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: session.user.email,
         password: currentPassword,
@@ -325,6 +335,7 @@ export default function MiPerfilPage() {
                   </div>
                 </div>
               </CardHeader>
+
               <CardContent>
                 <div className="grid sm:grid-cols-2 gap-4 pt-4 border-t">
                   {/* CI */}
@@ -356,24 +367,37 @@ export default function MiPerfilPage() {
                       </p>
                     </div>
                   </div>
-                </div>
 
-                {/* Código destacado */}
-                {estudiante.codigo && (
                   <div className="mt-4 pt-4 border-t flex items-center gap-4">
-                    <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl text-yellow-700 dark:text-yellow-400 shrink-0">
-                      <Tag className="w-5 h-5" />
+                    <div className="p-3 bg-gray-300 dark:bg-gray-900/30 rounded-xl text-gray-700 dark:text-gray-400 shrink-0">
+                      <BookOpen className="w-5 h-5" />
                     </div>
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">
-                        Código de Estudiante
+                        Materia
                       </p>
-                      <p className="text-2xl font-bold mt-0.5 tracking-widest text-yellow-700 dark:text-yellow-400 font-mono border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20 inline-block px-3 py-1 rounded-lg">
-                        {estudiante.codigo}
+                      <p className="text-sm font-bold mt-0.5 tracking-widest text-gray-700 dark:text-gray-400 font-mono border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/20 inline-block px-3 py-1 rounded-lg">
+                        PROGRAMACION II
                       </p>
                     </div>
                   </div>
-                )}
+                  {/* Código destacado */}
+                  {estudiante.codigo && (
+                    <div className="mt-4 pt-4 border-t flex items-center gap-4">
+                      <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl text-yellow-700 dark:text-yellow-400 shrink-0">
+                        <Tag className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Código de Estudiante
+                        </p>
+                        <p className="text-2xl font-bold mt-0.5 tracking-widest text-yellow-700 dark:text-yellow-400 font-mono border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20 inline-block px-3 py-1 rounded-lg">
+                          {estudiante.codigo}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -394,7 +418,11 @@ export default function MiPerfilPage() {
                   <h3 className="font-semibold text-lg flex items-center gap-2 mb-3">
                     <Users className="w-4 h-4 text-muted-foreground" />
                     Nota de Asistencia
-                    <span className={`ml-auto text-xl font-bold ${getNotaColor()}`}>{notaFormateada} pts</span>
+                    <span
+                      className={`ml-auto text-xl font-bold ${getNotaColor()}`}
+                    >
+                      {notaFormateada} pts
+                    </span>
                   </h3>
                   {loadingAsistencias ? (
                     <div className="h-10 flex items-center justify-center">
@@ -405,7 +433,10 @@ export default function MiPerfilPage() {
                       <div>
                         <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
                           <span>Progreso de clases asistidas</span>
-                          <span>{asistenciasPresente} / {TOTAL_CLASES} ({porcentajeAsistencia.toFixed(0)}%)</span>
+                          <span>
+                            {asistenciasPresente} / {TOTAL_CLASES} (
+                            {porcentajeAsistencia.toFixed(0)}%)
+                          </span>
                         </div>
                         <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
                           <div
@@ -417,13 +448,14 @@ export default function MiPerfilPage() {
                       {asistenciasPresente >= TOTAL_CLASES && (
                         <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-3 py-2 rounded-lg">
                           <CheckCircle className="w-4 h-4 shrink-0" />
-                          ¡Asistencia completa! Tienes los 10 puntos de asistencia.
+                          ¡Asistencia completa! Tienes los 10 puntos de
+                          asistencia.
                         </div>
                       )}
                     </div>
                   )}
                 </div>
-                
+
                 {/* Divider */}
                 <div className="border-t"></div>
 
@@ -472,22 +504,8 @@ export default function MiPerfilPage() {
           {/* Right column */}
           <div className="flex flex-col gap-6">
             {/* Global Grade Card */}
-            
 
             {/* Academic Info Card */}
-            <Card className="border-border shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-lg">Información Académica</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="bg-muted p-4 rounded-xl shadow-sm border border-border/50">
-                  <p className="text-xs text-muted-foreground mb-1">Materia</p>
-                  <p className="font-semibold text-foreground">
-                    Programación II
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
 
             <Card className="bg-gradient-to-br from-primary/5 to-muted border-primary/20 shadow-sm overflow-hidden relative">
               <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-10 -mt-10 blur-xl"></div>
@@ -501,16 +519,18 @@ export default function MiPerfilPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {(loadingAsistencias || loadingExtras) ? (
+                {loadingAsistencias || loadingExtras ? (
                   <div className="h-24 flex items-center justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                   </div>
                 ) : (
                   <div className="text-center py-6">
-                    <span
-                      className="text-6xl font-black tabular-nums text-foreground"
-                    >
-                      {(notaAsistencia + puntosExtra + puntosActividades).toFixed(2)}
+                    <span className="text-6xl font-black tabular-nums text-foreground">
+                      {(
+                        notaAsistencia +
+                        puntosExtra +
+                        puntosActividades
+                      ).toFixed(2)}
                     </span>
                     <span className="text-lg font-semibold text-muted-foreground block mt-1">
                       Puntos Acumulados
@@ -537,7 +557,8 @@ export default function MiPerfilPage() {
               Cambiar Contraseña
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Ingresa tu contraseña actual y la nueva contraseña. Deberá tener al menos 6 caracteres.
+              Ingresa tu contraseña actual y la nueva contraseña. Deberá tener
+              al menos 6 caracteres.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
