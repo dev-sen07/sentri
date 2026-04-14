@@ -32,16 +32,6 @@ const AUXILIAR_CARDS = [
     iconBg: 'bg-emerald-100 dark:bg-emerald-900/40',
   },
   {
-    title: 'Ver Asistencias',
-    description: 'Historial completo y estadísticas de asistencia',
-    href: '/ver-asistencias',
-    icon: History,
-    gradient: 'from-violet-500/20 to-purple-500/10',
-    border: 'border-violet-200 dark:border-violet-900',
-    iconColor: 'text-violet-600 dark:text-violet-400',
-    iconBg: 'bg-violet-100 dark:bg-violet-900/40',
-  },
-  {
     title: 'Prácticas',
     description: 'Gestionar ejercicios Python y revisar entregas',
     href: '/practicas',
@@ -88,7 +78,7 @@ const ESTUDIANTE_CARDS = [
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [userRole, setUserRole] = useState<'estudiante' | 'auxiliar' | null>(null)
+  const [userRole, setUserRole] = useState<'estudiante' | 'auxiliar' | 'delegado' | null>(null)
   const [userName, setUserName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -105,10 +95,10 @@ export default function DashboardPage() {
           .single()
 
         if (roleData) {
-          const role = roleData.rol as 'estudiante' | 'auxiliar'
+          const role = roleData.rol as 'estudiante' | 'auxiliar' | 'delegado'
           setUserRole(role)
 
-          if (role === 'estudiante') {
+          if (role === 'estudiante' || role === 'delegado') {
             const { data: studentData } = await supabase
               .from('estudiantes')
               .select('nombre')
@@ -173,7 +163,7 @@ export default function DashboardPage() {
               </p>
               <div className="mt-4 inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium border border-white/30">
                 <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                {userRole === 'auxiliar' ? 'Auxiliar de Laboratorio' : 'Estudiante'}
+                {userRole === 'auxiliar' ? 'Auxiliar de Laboratorio' : (userRole === 'delegado' ? 'Delegado' : 'Estudiante')}
               </div>
             </div>
           </div>

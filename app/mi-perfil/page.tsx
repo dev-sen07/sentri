@@ -34,9 +34,12 @@ import {
   CheckCircle,
   Users,
   BarChart3,
+  Star,
+  Sparkles,
+  Activity,
 } from "lucide-react";
 
-const TOTAL_CLASES = 16;
+const TOTAL_CLASES = 15;
 const PUNTOS_MAXIMOS = 10;
 
 export default function MiPerfilPage() {
@@ -47,6 +50,11 @@ export default function MiPerfilPage() {
   // Attendance stats
   const [asistenciasPresente, setAsistenciasPresente] = useState(0);
   const [loadingAsistencias, setLoadingAsistencias] = useState(true);
+
+  // Extras and Activities stats
+  const [puntosExtra, setPuntosExtra] = useState(0);
+  const [puntosActividades, setPuntosActividades] = useState(0);
+  const [loadingExtras, setLoadingExtras] = useState(true);
 
   // Change password dialog
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
@@ -74,7 +82,7 @@ export default function MiPerfilPage() {
           .eq("user_id", session.user.id)
           .single();
 
-        if (!roleData || roleData.rol !== "estudiante") {
+        if (!roleData || (roleData.rol !== "estudiante" && roleData.rol !== "delegado")) {
           router.push("/dashboard");
           return;
         }
@@ -100,12 +108,38 @@ export default function MiPerfilPage() {
             ).length;
             setAsistenciasPresente(presentes);
           }
+
+          // Fetch Extras
+          const { data: extrasData } = await supabase
+            .from("extras")
+            .select("puntos")
+            .eq("estudiante_id", estudianteData.id);
+
+          if (extrasData) {
+            const sumaExtras = extrasData.reduce((acc, curr) => acc + (Number(curr.puntos) || 0), 0);
+            setPuntosExtra(sumaExtras);
+          }
+
+          // Fetch Actividades
+          const { data: actividadesData } = await supabase
+            .from("actividad_participantes")
+            .select("actividades(ponderacion)")
+            .eq("estudiante_id", estudianteData.id);
+
+          if (actividadesData) {
+            const sumaActividades = actividadesData.reduce((acc, curr) => {
+              const act = Array.isArray(curr.actividades) ? curr.actividades[0] : curr.actividades;
+              return acc + (Number(act?.ponderacion) || 0);
+            }, 0);
+            setPuntosActividades(sumaActividades);
+          }
         }
       } catch (error) {
         console.error("Error:", error);
       } finally {
         setLoading(false);
         setLoadingAsistencias(false);
+        setLoadingExtras(false);
       }
     };
     checkAuthAndFetchData();
@@ -200,12 +234,13 @@ export default function MiPerfilPage() {
   const getInitials = (nombre: string, apellido: string) =>
     `${nombre.charAt(0)}${apellido.charAt(0)}`.toUpperCase();
 
-  // Grade calculation: (presentes / 16) * 10, max 10
+  // Grade calculation: (presentes / 15) * 10, max 10
   const notaAsistencia = Math.min(
     (asistenciasPresente / TOTAL_CLASES) * PUNTOS_MAXIMOS,
     PUNTOS_MAXIMOS,
   );
   const notaFormateada = notaAsistencia.toFixed(2);
+
   const porcentajeAsistencia = Math.min(
     (asistenciasPresente / TOTAL_CLASES) * 100,
     100,
@@ -255,185 +290,235 @@ export default function MiPerfilPage() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main Info Card */}
-          <Card className="lg:col-span-2 border-border shadow-sm">
-            <CardHeader className="pb-4">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          {/* Left column */}
+          <div className="flex flex-col gap-6 lg:col-span-2">
+            {/* Main Info Card */}
+            <Card className="border-border shadow-sm">
+              <CardHeader className="pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-3xl font-bold">
+                      {estudiante.nombre} {estudiante.apellido}
+                    </CardTitle>
+                    <CardDescription className="text-base mt-1 flex items-center gap-2">
+                      <Mail className="w-4 h-4" /> {estudiante.correo}
+                    </CardDescription>
+                  </div>
+                  <div className="flex flex-col gap-2 items-start sm:items-end">
+                    {/* Paralelo Badge */}
+                    <div className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full border border-primary/20 shrink-0">
+                      <BookOpen className="w-5 h-5" />
+                      <span className="font-semibold text-lg">
+                        Paralelo {estudiante.paralelo}
+                      </span>
+                    </div>
+                    {/* Change Password Button */}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="flex items-center gap-2 hover:bg-amber-500 bg-amber-400 text-amber-900 p-5 cursor-pointer"
+                      onClick={() => setPasswordDialogOpen(true)}
+                    >
+                      <Lock className="w-4 h-4" />
+                      Cambiar Contraseña
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid sm:grid-cols-2 gap-4 pt-4 border-t">
+                  {/* CI */}
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-muted rounded-xl text-muted-foreground shrink-0">
+                      <Info className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Cédula de Identidad
+                      </p>
+                      <p className="text-lg font-semibold mt-1">
+                        {estudiante.ci}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* RU */}
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-muted rounded-xl text-muted-foreground shrink-0">
+                      <Hash className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Registro Único (RU)
+                      </p>
+                      <p className="text-lg font-semibold mt-1">
+                        {estudiante.ru}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Código destacado */}
+                {estudiante.codigo && (
+                  <div className="mt-4 pt-4 border-t flex items-center gap-4">
+                    <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl text-yellow-700 dark:text-yellow-400 shrink-0">
+                      <Tag className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">
+                        Código de Estudiante
+                      </p>
+                      <p className="text-2xl font-bold mt-0.5 tracking-widest text-yellow-700 dark:text-yellow-400 font-mono border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20 inline-block px-3 py-1 rounded-lg">
+                        {estudiante.codigo}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Desglose de Notas */}
+            <Card className="border-border shadow-sm">
+              <CardHeader className="pb-3 border-b">
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" />
+                  Desglose de Notas
+                </CardTitle>
+                <CardDescription>
+                  Detalle de tus puntos acumulados por asistencia y actividades.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-6">
+                {/* Asistencias Section */}
                 <div>
-                  <CardTitle className="text-3xl font-bold">
-                    {estudiante.nombre} {estudiante.apellido}
-                  </CardTitle>
-                  <CardDescription className="text-base mt-1 flex items-center gap-2">
-                    <Mail className="w-4 h-4" /> {estudiante.correo}
-                  </CardDescription>
+                  <h3 className="font-semibold text-lg flex items-center gap-2 mb-3">
+                    <Users className="w-4 h-4 text-muted-foreground" />
+                    Nota de Asistencia
+                    <span className={`ml-auto text-xl font-bold ${getNotaColor()}`}>{notaFormateada} pts</span>
+                  </h3>
+                  {loadingAsistencias ? (
+                    <div className="h-10 flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                          <span>Progreso de clases asistidas</span>
+                          <span>{asistenciasPresente} / {TOTAL_CLASES} ({porcentajeAsistencia.toFixed(0)}%)</span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+                          <div
+                            className={`h-2.5 rounded-full transition-all duration-700 ${getBarColor()}`}
+                            style={{ width: `${porcentajeAsistencia}%` }}
+                          />
+                        </div>
+                      </div>
+                      {asistenciasPresente >= TOTAL_CLASES && (
+                        <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-3 py-2 rounded-lg">
+                          <CheckCircle className="w-4 h-4 shrink-0" />
+                          ¡Asistencia completa! Tienes los 10 puntos de asistencia.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-col gap-2 items-start sm:items-end">
-                  {/* Paralelo Badge */}
-                  <div className="flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full border border-primary/20 shrink-0">
-                    <BookOpen className="w-5 h-5" />
-                    <span className="font-semibold text-lg">
-                      Paralelo {estudiante.paralelo}
-                    </span>
-                  </div>
-                  {/* Change Password Button */}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="flex items-center gap-2 hover:bg-amber-500 bg-amber-400 text-amber-900 p-5 cursor-pointer"
-                    onClick={() => setPasswordDialogOpen(true)}
-                  >
-                    <Lock className="w-4 h-4" />
-                    Cambiar Contraseña
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid sm:grid-cols-2 gap-4 pt-4 border-t">
-                {/* CI */}
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-muted rounded-xl text-muted-foreground shrink-0">
-                    <Info className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">
-                      Cédula de Identidad
-                    </p>
-                    <p className="text-lg font-semibold mt-1">
-                      {estudiante.ci}
-                    </p>
-                  </div>
-                </div>
+                
+                {/* Divider */}
+                <div className="border-t"></div>
 
-                {/* RU */}
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-muted rounded-xl text-muted-foreground shrink-0">
-                    <Hash className="w-5 h-5" />
+                {/* Extras Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-lg flex items-center gap-2">
+                      <Star className="w-4 h-4 text-amber-500" />
+                      Puntos Extra
+                    </h3>
+                    {!loadingExtras && (
+                      <span className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400 px-3 py-1 rounded-full text-sm font-bold border border-amber-200 dark:border-amber-800">
+                        +{puntosExtra + puntosActividades} pts totales
+                      </span>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">
-                      Registro Único (RU)
-                    </p>
-                    <p className="text-lg font-semibold mt-1">
-                      {estudiante.ru}
-                    </p>
-                  </div>
+                  {loadingExtras ? (
+                    <div className="h-10 flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                    </div>
+                  ) : (
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="bg-background p-3 rounded-xl border border-border/40 text-center flex items-center justify-between px-4">
+                        <p className="text-sm text-muted-foreground flex items-center gap-1.5 focus:outline-none">
+                          <Sparkles className="w-4 h-4" /> Puntos Directos
+                        </p>
+                        <p className="font-bold text-lg text-amber-600 dark:text-amber-400">
+                          +{puntosExtra}
+                        </p>
+                      </div>
+                      <div className="bg-background p-3 rounded-xl border border-border/40 text-center flex items-center justify-between px-4">
+                        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+                          <Activity className="w-4 h-4" /> Actividades
+                        </p>
+                        <p className="font-bold text-lg text-amber-600 dark:text-amber-400">
+                          +{puntosActividades}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-
-              {/* Código destacado */}
-              {estudiante.codigo && (
-                <div className="mt-4 pt-4 border-t flex items-center gap-4">
-                  <div className="p-3 bg-yellow-100 dark:bg-yellow-900/30 rounded-xl text-yellow-700 dark:text-yellow-400 shrink-0">
-                    <Tag className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">
-                      Código de Estudiante
-                    </p>
-                    <p className="text-2xl font-bold mt-0.5 tracking-widest text-yellow-700 dark:text-yellow-400 font-mono border border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-900/20 inline-block px-3 py-1 rounded-lg">
-                      {estudiante.codigo}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Right column */}
           <div className="flex flex-col gap-6">
+            {/* Global Grade Card */}
+            
+
             {/* Academic Info Card */}
-            <Card className="bg-gradient-to-br from-primary/5 to-muted border-border shadow-sm">
+            <Card className="border-border shadow-sm">
               <CardHeader>
                 <CardTitle className="text-lg">Información Académica</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="bg-background p-4 rounded-xl shadow-sm border border-border/50">
+                <div className="bg-muted p-4 rounded-xl shadow-sm border border-border/50">
                   <p className="text-xs text-muted-foreground mb-1">Materia</p>
                   <p className="font-semibold text-foreground">
                     Programación II
                   </p>
                 </div>
-                <div className="bg-background p-4 rounded-xl shadow-sm border border-border/50">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    Grupo Asignado
-                  </p>
-                  <p className="font-semibold text-foreground flex items-center gap-2">
-                    <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                    Paralelo {estudiante.paralelo}
-                  </p>
-                </div>
-                {/* Attendance Grade Card */}
-                <Card className="border-border shadow-sm">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5 text-primary" />
-                      Nota Actual
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {loadingAsistencias ? (
-                      <div className="h-16 flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Big score */}
-                        <div className="text-center py-2">
-                          <span
-                            className={`text-5xl font-black tabular-nums ${getNotaColor()}`}
-                          >
-                            {notaFormateada}
-                          </span>
-                          <span className="text-xl font-semibold text-muted-foreground">
-                            {" "}
-                            / 10
-                          </span>
-                        </div>
-
-                        {/* Progress bar */}
-                        <div>
-                          <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-                            <span>Progreso de asistencia</span>
-                            <span>{porcentajeAsistencia.toFixed(0)}%</span>
-                          </div>
-                          <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
-                            <div
-                              className={`h-2.5 rounded-full transition-all duration-700 ${getBarColor()}`}
-                              style={{ width: `${porcentajeAsistencia}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Stats row */}
-                        <div className="flex items-center justify-between pt-1 border-t">
-                          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                            <Users className="w-4 h-4" />
-                            <span>Asistencias</span>
-                          </div>
-                          <div className="flex items-center gap-1 font-semibold text-sm">
-                            <span className="text-emerald-600 dark:text-emerald-400">
-                              {asistenciasPresente}
-                            </span>
-                            <span className="text-muted-foreground">
-                              / {TOTAL_CLASES}
-                            </span>
-                          </div>
-                        </div>
-
-                        {asistenciasPresente >= TOTAL_CLASES && (
-                          <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-3 py-2 rounded-lg">
-                            <CheckCircle className="w-4 h-4 shrink-0" />
-                            ¡Asistencia completa! Tienes los 10 puntos.
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </CardContent>
-                </Card>
               </CardContent>
             </Card>
-            
+
+            <Card className="bg-gradient-to-br from-primary/5 to-muted border-primary/20 shadow-sm overflow-hidden relative">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-10 -mt-10 blur-xl"></div>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <Star className="w-6 h-6 text-primary fill-primary/20" />
+                  Nota Global
+                </CardTitle>
+                <CardDescription>
+                  Suma total de tu rendimiento actual
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {(loadingAsistencias || loadingExtras) ? (
+                  <div className="h-24 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <span
+                      className="text-6xl font-black tabular-nums text-foreground"
+                    >
+                      {(notaAsistencia + puntosExtra + puntosActividades).toFixed(2)}
+                    </span>
+                    <span className="text-lg font-semibold text-muted-foreground block mt-1">
+                      Puntos Acumulados
+                    </span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </main>

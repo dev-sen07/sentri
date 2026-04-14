@@ -38,14 +38,14 @@ export default function MisAsistenciasPage() {
           return
         }
 
-        // Check if user is estudiante
+        // Check if user is estudiante or delegado
         const { data: roleData } = await supabase
           .from('usuarios_roles')
           .select('rol')
           .eq('user_id', session.user.id)
           .single()
 
-        if (!roleData || roleData.rol !== 'estudiante') {
+        if (!roleData || (roleData.rol !== 'estudiante' && roleData.rol !== 'delegado')) {
           router.push('/dashboard')
           return
         }

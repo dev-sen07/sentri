@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Papa from 'papaparse'
-import { supabase, EstudianteRow } from '@/lib/supabase'
+import { supabase, EstudianteRow, AsistenciaRow } from '@/lib/supabase'
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -31,13 +31,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination"
 
 export default function EstudiantesPage() {
   const router = useRouter()
   const [estudiantes, setEstudiantes] = useState<EstudianteRow[]>([])
-  const [filteredEstudiantes, setFilteredEstudiantes] = useState<EstudianteRow[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [isAuthorized, setIsAuthorized] = useState(false)
+  const pageSize = 10
   
   // Modal states
   const [openModal, setOpenModal] = useState(false)
@@ -53,21 +67,80 @@ export default function EstudiantesPage() {
   const [errorRegistrar, setErrorRegistrar] = useState<string | null>(null)
   const [successRegistrar, setSuccessRegistrar] = useState(false)
 
+  // Asistencias Modal states
+  const [openAsistenciasModal, setOpenAsistenciasModal] = useState(false)
+  const [estudianteSeleccionado, setEstudianteSeleccionado] = useState<EstudianteRow | null>(null)
+  const [asistenciasSeleccionadas, setAsistenciasSeleccionadas] = useState<AsistenciaRow[]>([])
+  const [loadingAsistencias, setLoadingAsistencias] = useState(false)
+
   // CSV Import states
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [importing, setImporting] = useState(false)
   const [importProgress, setImportProgress] = useState({ total: 0, current: 0, success: 0, errors: 0 })
   const [importResult, setImportResult] = useState<{ errors: Array<{ row: number, message: string }> } | null>(null)
 
-  const fetchEstudiantesData = async () => {
-    const { data: estudiantesData, error } = await supabase
+  const fetchEstudiantesData = async (page: number, search: string) => {
+    let query = supabase
       .from('estudiantes')
-      .select('*')
+      .select('*', { count: 'exact' })
       .order('apellido', { ascending: true })
 
-    if (error) throw error
+    if (search) {
+      query = query.or(`nombre.ilike.%${search}%,apellido.ilike.%${search}%,ci.ilike.%${search}%,ru.ilike.%${search}%,paralelo.ilike.%${search}%`)
+    }
+
+    const fromOffset = (page - 1) * pageSize
+    const toOffset = fromOffset + pageSize - 1
+    query = query.range(fromOffset, toOffset)
+
+    const { data: estudiantesData, error, count } = await query
+
+    if (error) {
+      console.error('Error fetching estudiantes:', error)
+      return
+    }
+    
     setEstudiantes(estudiantesData || [])
-    setFilteredEstudiantes(estudiantesData || [])
+    if (count !== null) {
+      setTotalRecords(count)
+      setTotalPages(Math.ceil(count / pageSize))
+    }
+  }
+
+  const handleVerAsistencias = async (estudiante: EstudianteRow) => {
+    setEstudianteSeleccionado(estudiante)
+    setOpenAsistenciasModal(true)
+    setLoadingAsistencias(true)
+    
+    try {
+      const { data, error } = await supabase
+        .from('asistencias')
+        .select('*')
+        .eq('estudiante_id', estudiante.id)
+        .order('fecha', { ascending: false })
+        .order('hora', { ascending: false })
+        
+      if (error) throw error
+      setAsistenciasSeleccionadas(data || [])
+    } catch (err) {
+      console.error('Error fetching asistencias', err)
+      setAsistenciasSeleccionadas([])
+    } finally {
+      setLoadingAsistencias(false)
+    }
+  }
+
+  const getEstadoBadgeColor = (estado: string) => {
+    switch (estado) {
+      case 'presente':
+        return 'bg-green-100 text-green-800'
+      case 'ausente':
+        return 'bg-red-100 text-red-800'
+      case 'retraso':
+        return 'bg-yellow-100 text-yellow-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
   }
 
   useEffect(() => {
@@ -94,8 +167,8 @@ export default function EstudiantesPage() {
           return
         }
 
-        // Fetch estudiantes
-        await fetchEstudiantesData()
+        setIsAuthorized(true)
+        // initial fetch is handled by the dependency useEffect below
       } catch (error) {
         console.error('Error:', error)
       } finally {
@@ -107,16 +180,18 @@ export default function EstudiantesPage() {
   }, [router])
 
   useEffect(() => {
-    const filtered = estudiantes.filter(
-      (est) =>
-        est.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        est.apellido.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        est.ci.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        est.ru.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (est.paralelo && est.paralelo.toLowerCase().includes(searchTerm.toLowerCase()))
-    )
-    setFilteredEstudiantes(filtered)
-  }, [searchTerm, estudiantes])
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+      setCurrentPage(1) // Reset back to page 1 on search change
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  useEffect(() => {
+    if (isAuthorized) {
+      fetchEstudiantesData(currentPage, debouncedSearchTerm)
+    }
+  }, [currentPage, debouncedSearchTerm, isAuthorized])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -162,7 +237,7 @@ export default function EstudiantesPage() {
         paralelo: 'A',
       })
 
-      await fetchEstudiantesData()
+      await fetchEstudiantesData(currentPage, debouncedSearchTerm)
 
       setTimeout(() => {
         setOpenModal(false)
@@ -227,7 +302,7 @@ export default function EstudiantesPage() {
           }
         }
 
-        await fetchEstudiantesData()
+        await fetchEstudiantesData(currentPage, debouncedSearchTerm)
         setImportResult({ errors: importErrors })
         setImporting(false)
         
@@ -259,7 +334,7 @@ export default function EstudiantesPage() {
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Estudiantes</h1>
               <p className="text-muted-foreground mt-2">
-                Total: {filteredEstudiantes.length} estudiantes
+                Total: {totalRecords} estudiantes
               </p>
             </div>
             
@@ -349,6 +424,57 @@ export default function EstudiantesPage() {
                 </form>
               </DialogContent>
             </Dialog>
+
+            {/* Asistencias Modal */}
+            <Dialog open={openAsistenciasModal} onOpenChange={setOpenAsistenciasModal}>
+              <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    Historial de Asistencias
+                    {estudianteSeleccionado && ` - ${estudianteSeleccionado.nombre} ${estudianteSeleccionado.apellido}`}
+                  </DialogTitle>
+                  <DialogDescription>
+                    Registro de todas las asistencias de este estudiante.
+                  </DialogDescription>
+                </DialogHeader>
+                
+                <div className="mt-4">
+                  {loadingAsistencias ? (
+                    <p className="text-center py-4 text-muted-foreground">Cargando...</p>
+                  ) : asistenciasSeleccionadas.length === 0 ? (
+                    <p className="text-center py-4 text-muted-foreground">No hay registros de asistencia</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Fecha</TableHead>
+                          <TableHead>Hora</TableHead>
+                          <TableHead>Estado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {asistenciasSeleccionadas.map((asistencia) => (
+                          <TableRow key={asistencia.id}>
+                            <TableCell>
+                              {new Date(asistencia.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' })}
+                            </TableCell>
+                            <TableCell>{asistencia.hora}</TableCell>
+                            <TableCell>
+                              <span
+                                className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getEstadoBadgeColor(asistencia.estado)}`}
+                              >
+                                {asistencia.estado.charAt(0).toUpperCase() +
+                                  asistencia.estado.slice(1)}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
             </div>
           </div>
           
@@ -394,9 +520,9 @@ export default function EstudiantesPage() {
               <CardTitle>Lista de Estudiantes</CardTitle>
             </CardHeader>
             <CardContent>
-              {filteredEstudiantes.length === 0 ? (
+              {estudiantes.length === 0 ? (
                 <p className="text-center py-8 text-muted-foreground">
-                  No hay estudiantes registrados
+                  No se encontraron estudiantes
                 </p>
               ) : (
                 <div className="overflow-x-auto">
@@ -409,10 +535,11 @@ export default function EstudiantesPage() {
                         <TableHead>RU</TableHead>
                         <TableHead>Paralelo</TableHead>
                         <TableHead>Correo</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredEstudiantes.map((est) => (
+                      {estudiantes.map((est) => (
                         <TableRow key={est.id}>
                           <TableCell className="font-medium">{est.nombre}</TableCell>
                           <TableCell>{est.apellido}</TableCell>
@@ -420,10 +547,53 @@ export default function EstudiantesPage() {
                           <TableCell>{est.ru}</TableCell>
                           <TableCell className="font-bold text-center">{est.paralelo}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{est.correo}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end">
+                              <Button variant="outline" size="sm" onClick={() => handleVerAsistencias(est)}>
+                                Ver Asistencias
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
+                </div>
+              )}
+
+              {totalPages > 1 && (
+                <div className="mt-4">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious 
+                          href="#" 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (currentPage > 1) setCurrentPage(p => p - 1);
+                          }}
+                          className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
+                        />
+                      </PaginationItem>
+                      
+                      <PaginationItem>
+                        <span className="text-sm mx-4">
+                          Página {currentPage} de {totalPages}
+                        </span>
+                      </PaginationItem>
+
+                      <PaginationItem>
+                        <PaginationNext 
+                          href="#" 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (currentPage < totalPages) setCurrentPage(p => p + 1);
+                          }}
+                          className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
                 </div>
               )}
             </CardContent>

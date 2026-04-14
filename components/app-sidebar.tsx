@@ -12,6 +12,8 @@ import {
   BookOpen,
   Sparkles,
   Video,
+  Star,
+  Activity,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -35,7 +37,7 @@ export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { setOpenMobile } = useSidebar()
-  const [userRole, setUserRole] = React.useState<'estudiante' | 'auxiliar' | null>(null)
+  const [userRole, setUserRole] = React.useState<'estudiante' | 'auxiliar' | 'delegado' | null>(null)
   const [userName, setUserName] = React.useState<string | null>(null)
 
   React.useEffect(() => {
@@ -52,10 +54,10 @@ export function AppSidebar() {
           .single()
 
         if (roleData) {
-          const role = roleData.rol as 'estudiante' | 'auxiliar'
+          const role = roleData.rol as 'estudiante' | 'auxiliar' | 'delegado'
           setUserRole(role)
           
-          if (role === 'estudiante') {
+          if (role === 'estudiante' || role === 'delegado') {
             const { data: studentData } = await supabase
               .from('estudiantes')
               .select('nombre, apellido')
@@ -86,7 +88,7 @@ export function AppSidebar() {
     const auxiliarNav = [
       { title: 'Estudiantes', url: '/estudiantes', icon: Users },
       { title: 'Marcar Asistencia', url: '/marcar-asistencia', icon: CheckSquare },
-      { title: 'Ver Asistencias', url: '/ver-asistencias', icon: History },
+      { title: 'Extras', url: '/extras', icon: Star },
       { title: 'Ver Prácticas', url: '/practicas', icon: BookOpen },
       { title: 'Clases Grabadas', url: '/clases-grabadas', icon: Video },
     ]
@@ -98,8 +100,14 @@ export function AppSidebar() {
       { title: 'Mi Perfil', url: '/mi-perfil', icon: User },
     ]
 
+    const delegadoNav = [
+      ...estudianteNav,
+      { title: 'Actividades', url: '/mis-actividades', icon: Activity },
+    ]
+
     if (userRole === 'auxiliar') return [...commonNav, ...auxiliarNav]
     if (userRole === 'estudiante') return [...commonNav, ...estudianteNav]
+    if (userRole === 'delegado') return [...commonNav, ...delegadoNav]
     return commonNav
   }
 

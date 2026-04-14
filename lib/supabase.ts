@@ -32,7 +32,7 @@ export type AsistenciaRow = {
 export type UsuarioRolRow = {
   id: string
   user_id: string
-  rol: 'estudiante' | 'auxiliar'
+  rol: 'estudiante' | 'auxiliar' | 'delegado'
 }
 
 export type VerificacionTipo =
@@ -84,3 +84,27 @@ export type ClaseGrabadaRow = {
   creado_en: string
 }
 
+export type ExtraRow = {
+  id: string
+  estudiante_id: string
+  puntos: number
+  descripcion: string | null
+  creado_en: string
+}
+
+export type ActividadRow = {
+  id: string
+  nombre: string
+  fecha: string
+  ponderacion?: number | null
+  hora_inicio?: string | null
+  hora_fin?: string | null
+  creado_en: string
+}
+
+export type ActividadParticipanteRow = {
+  id: string
+  actividad_id: string
+  estudiante_id: string
+  registrado_en: string
+}
