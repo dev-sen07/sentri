@@ -108,3 +108,36 @@ export type ActividadParticipanteRow = {
   estudiante_id: string
   registrado_en: string
 }
+
+export type ArchivoMetadata = {
+  nombre: string
+  drive_file_id: string
+  drive_url: string
+  tipo: string
+  size: number
+}
+
+export type PresentacionTareaRow = {
+  id: string
+  titulo: string
+  descripcion: string | null
+  paralelo: 'A' | 'B' | 'C'
+  fecha_limite: string | null
+  ponderacion: number
+  pdf_file_id: string | null
+  pdf_url: string | null
+  creado_en: string
+}
+
+export type PresentacionEntregaRow = {
+  id: string
+  tarea_id: string
+  estudiante_id: string
+  archivos: ArchivoMetadata[]
+  estado: 'revision' | 'revisado'
+  nota: number | null
+  comentario: string | null
+  drive_folder_id: string | null
+  entregado_en: string
+  revisado_en: string | null
+}

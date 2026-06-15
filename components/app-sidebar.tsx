@@ -14,6 +14,8 @@ import {
   Video,
   Star,
   Activity,
+  FileUp,
+  FileText,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -90,12 +92,15 @@ export function AppSidebar() {
       { title: 'Marcar Asistencia', url: '/marcar-asistencia', icon: CheckSquare },
       { title: 'Extras', url: '/extras', icon: Star },
       { title: 'Ver Prácticas', url: '/practicas', icon: BookOpen },
+      { title: 'Presentaciones', url: '/presentar-practicas', icon: FileUp },
+      { title: 'Reporte Final', url: '/reporte-estudiantes', icon: FileText },
       { title: 'Clases Grabadas', url: '/clases-grabadas', icon: Video },
     ]
 
     const estudianteNav = [
       { title: 'Mis Asistencias', url: '/mis-asistencias', icon: History },
       { title: 'Prácticas', url: '/practicas', icon: Code },
+      { title: 'Presentar Prácticas', url: '/presentar-practicas', icon: FileUp },
       { title: 'Clases Grabadas', url: '/clases-grabadas', icon: Video },
       { title: 'Mi Perfil', url: '/mi-perfil', icon: User },
     ]

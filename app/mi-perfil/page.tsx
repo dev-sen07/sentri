@@ -37,6 +37,7 @@ import {
   Star,
   Sparkles,
   Activity,
+  FileUp,
 } from "lucide-react";
 
 const TOTAL_CLASES = 10;
@@ -55,6 +56,11 @@ export default function MiPerfilPage() {
   const [puntosExtra, setPuntosExtra] = useState(0);
   const [puntosActividades, setPuntosActividades] = useState(0);
   const [loadingExtras, setLoadingExtras] = useState(true);
+
+  // Presentaciones stats
+  const [puntosPresentaciones, setPuntosPresentaciones] = useState(0);
+  const [presentacionesRevisadas, setPresentacionesRevisadas] = useState<{titulo: string; nota: number; ponderacion: number}[]>([]);
+  const [loadingPresentaciones, setLoadingPresentaciones] = useState(true);
 
   // Change password dialog
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
@@ -141,6 +147,35 @@ export default function MiPerfilPage() {
             }, 0);
             setPuntosActividades(sumaActividades);
           }
+
+          // Fetch Presentaciones revisadas
+          const { data: entregasData } = await supabase
+            .from("presentaciones_entregas")
+            .select("nota, tarea_id")
+            .eq("estudiante_id", estudianteData.id)
+            .eq("estado", "revisado");
+
+          if (entregasData && entregasData.length > 0) {
+            const tareaIds = entregasData.map((e) => e.tarea_id);
+            const { data: tareasData } = await supabase
+              .from("presentaciones_tareas")
+              .select("id, titulo, ponderacion")
+              .in("id", tareaIds);
+
+            if (tareasData) {
+              const detalles = entregasData.map((e) => {
+                const t = tareasData.find((t) => t.id === e.tarea_id);
+                return {
+                  titulo: t?.titulo || "Tarea",
+                  nota: Number(e.nota) || 0,
+                  ponderacion: Number(t?.ponderacion) || 0,
+                };
+              });
+              setPresentacionesRevisadas(detalles);
+              const suma = detalles.reduce((acc, d) => acc + d.nota, 0);
+              setPuntosPresentaciones(suma);
+            }
+          }
         }
       } catch (error) {
         console.error("Error:", error);
@@ -148,6 +183,7 @@ export default function MiPerfilPage() {
         setLoading(false);
         setLoadingAsistencias(false);
         setLoadingExtras(false);
+        setLoadingPresentaciones(false);
       }
     };
     checkAuthAndFetchData();
@@ -497,6 +533,42 @@ export default function MiPerfilPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Divider */}
+                <div className="border-t"></div>
+
+                {/* Presentaciones Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-lg flex items-center gap-2">
+                      <FileUp className="w-4 h-4 text-teal-500" />
+                      Presentaciones
+                    </h3>
+                    {!loadingPresentaciones && (
+                      <span className="bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-400 px-3 py-1 rounded-full text-sm font-bold border border-teal-200 dark:border-teal-800">
+                        +{puntosPresentaciones} pts
+                      </span>
+                    )}
+                  </div>
+                  {loadingPresentaciones ? (
+                    <div className="h-10 flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                    </div>
+                  ) : presentacionesRevisadas.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Sin presentaciones revisadas aún.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {presentacionesRevisadas.map((p, i) => (
+                        <div key={i} className="bg-background p-3 rounded-xl border border-border/40 flex items-center justify-between">
+                          <p className="text-sm text-muted-foreground truncate">{p.titulo}</p>
+                          <p className="font-bold text-teal-600 dark:text-teal-400 shrink-0 ml-4">
+                            +{p.nota}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -519,7 +591,7 @@ export default function MiPerfilPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {loadingAsistencias || loadingExtras ? (
+                {loadingAsistencias || loadingExtras || loadingPresentaciones ? (
                   <div className="h-24 flex items-center justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                   </div>
@@ -529,7 +601,8 @@ export default function MiPerfilPage() {
                       {(
                         notaAsistencia +
                         puntosExtra +
-                        puntosActividades
+                        puntosActividades +
+                        puntosPresentaciones
                       ).toFixed(2)}
                     </span>
                     <span className="text-lg font-semibold text-muted-foreground block mt-1">

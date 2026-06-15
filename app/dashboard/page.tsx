@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import {
-  Users, CheckSquare, History, Code, User, LayoutDashboard, BookOpen
+  Users, CheckSquare, History, Code, User, LayoutDashboard, BookOpen, FileUp, FileText
 } from 'lucide-react'
 
 const AUXILIAR_CARDS = [
@@ -41,6 +41,26 @@ const AUXILIAR_CARDS = [
     iconColor: 'text-orange-600 dark:text-orange-400',
     iconBg: 'bg-orange-100 dark:bg-orange-900/40',
   },
+  {
+    title: 'Presentaciones',
+    description: 'Revisar archivos entregados por los estudiantes',
+    href: '/presentar-practicas',
+    icon: FileUp,
+    gradient: 'from-teal-500/20 to-cyan-500/10',
+    border: 'border-teal-200 dark:border-teal-900',
+    iconColor: 'text-teal-600 dark:text-teal-400',
+    iconBg: 'bg-teal-100 dark:bg-teal-900/40',
+  },
+  {
+    title: 'Reporte Final',
+    description: 'Exportar lista de estudiantes y notas a Excel o PDF',
+    href: '/reporte-estudiantes',
+    icon: FileText,
+    gradient: 'from-pink-500/20 to-rose-500/10',
+    border: 'border-pink-200 dark:border-pink-900',
+    iconColor: 'text-pink-600 dark:text-pink-400',
+    iconBg: 'bg-pink-100 dark:bg-pink-900/40',
+  },
 ]
 
 const ESTUDIANTE_CARDS = [
@@ -63,6 +83,16 @@ const ESTUDIANTE_CARDS = [
     border: 'border-indigo-200 dark:border-indigo-900',
     iconColor: 'text-indigo-600 dark:text-indigo-400',
     iconBg: 'bg-indigo-100 dark:bg-indigo-900/40',
+  },
+  {
+    title: 'Presentar Prácticas',
+    description: 'Sube tus archivos de prácticas para revisión',
+    href: '/presentar-practicas',
+    icon: FileUp,
+    gradient: 'from-teal-500/20 to-cyan-500/10',
+    border: 'border-teal-200 dark:border-teal-900',
+    iconColor: 'text-teal-600 dark:text-teal-400',
+    iconBg: 'bg-teal-100 dark:bg-teal-900/40',
   },
   {
     title: 'Mi Perfil',
