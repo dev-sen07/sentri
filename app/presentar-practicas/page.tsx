@@ -176,7 +176,7 @@ function EstudianteView({
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="max-w-5xl mx-auto px-4 pt-8 pb-20">
         {/* Header */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-500 via-cyan-600 to-blue-700 p-8 text-white shadow-xl mb-8">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_oklch(0.90_0.10_180/0.25)_0%,_transparent_60%)]" />
@@ -386,7 +386,7 @@ function EntregaDetailView({
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-3xl mx-auto px-4 py-8">
+      <main className="max-w-3xl mx-auto px-4 pt-8 pb-20">
         <Button variant="ghost" onClick={onBack} className="mb-6 text-muted-foreground hover:text-foreground">
           <ChevronLeft className="w-4 h-4 mr-1" /> Volver a tareas
         </Button>
@@ -698,7 +698,7 @@ function AuxiliarView() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="max-w-6xl mx-auto px-4 pt-8 pb-20">
         {/* Header */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-500 via-cyan-600 to-blue-700 p-8 text-white shadow-xl mb-8">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_oklch(0.90_0.10_180/0.25)_0%,_transparent_60%)]" />
@@ -1027,7 +1027,7 @@ function AuxiliarEntregasView({
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="max-w-5xl mx-auto px-4 pt-8 pb-20">
         <Button variant="ghost" onClick={onBack} className="mb-6 text-muted-foreground hover:text-foreground">
           <ChevronLeft className="w-4 h-4 mr-1" /> Volver a tareas
         </Button>
