@@ -39,7 +39,7 @@ import {
   Activity,
 } from "lucide-react";
 
-const TOTAL_CLASES = 14;
+const TOTAL_CLASES = 10;
 const PUNTOS_MAXIMOS = 10;
 
 export default function MiPerfilPage() {
