@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, EstudianteRow, ActividadRow } from '@/lib/supabase'
 import { cacheGet, cacheSet } from '@/lib/cache'
