@@ -377,14 +377,20 @@ function EstudianteLiberacionView() {
               </AlertDialogTitle>
               <AlertDialogDescription className="text-base text-white/70 mt-4 leading-relaxed">
                 ¿Está seguro de continuar? Al confirmar el examen de liberación:
-                <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl space-y-2">
-                  <p className="text-red-300 font-semibold flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    Su nota del semestre será 0 (cero)
-                  </p>
-                  <p className="text-red-300/80 text-sm">
-                    Solo se tomará en cuenta la nota obtenida en el examen de liberación.
-                  </p>
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
+                    <span className="text-white/70 text-sm">Nota actual del semestre:</span>
+                    <span className="text-xl font-bold text-white">{notaActual !== null ? notaActual.toFixed(2) : '0.00'}</span>
+                  </div>
+                  <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl space-y-2">
+                    <p className="text-red-300 font-semibold flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      Esta nota será reemplazada por 0 (cero)
+                    </p>
+                    <p className="text-red-300/80 text-sm">
+                      Si decide continuar, solo se tomará en cuenta la nota obtenida en el examen de liberación.
+                    </p>
+                  </div>
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -501,14 +507,20 @@ function EstudianteLiberacionView() {
               </AlertDialogTitle>
               <AlertDialogDescription className="text-base text-white/70 mt-4 leading-relaxed">
                 ¿Está seguro de continuar? Al confirmar el examen de liberación:
-                <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl space-y-2">
-                  <p className="text-red-300 font-semibold flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0" />
-                    Su nota del semestre será 0 (cero)
-                  </p>
-                  <p className="text-red-300/80 text-sm">
-                    Solo se tomará en cuenta la nota obtenida en el examen de liberación.
-                  </p>
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/10">
+                    <span className="text-white/70 text-sm">Nota actual del semestre:</span>
+                    <span className="text-xl font-bold text-white">{notaActual !== null ? notaActual.toFixed(2) : '0.00'}</span>
+                  </div>
+                  <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl space-y-2">
+                    <p className="text-red-300 font-semibold flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      Esta nota será reemplazada por 0 (cero)
+                    </p>
+                    <p className="text-red-300/80 text-sm">
+                      Si decide continuar, solo se tomará en cuenta la nota obtenida en el examen de liberación.
+                    </p>
+                  </div>
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
