@@ -31,10 +31,6 @@ import {
 } from '@/components/ui/select'
 import { Download, FileText, Table as TableIcon } from 'lucide-react'
 
-// Constants used for attendance points (same as mi-perfil)
-const TOTAL_CLASES = 10
-const PUNTOS_MAXIMOS = 10
-
 type EstudianteReporte = EstudianteRow & {
   notaAsistencia: number
   puntosExtra: number
@@ -69,57 +65,34 @@ export default function ReporteEstudiantesPage() {
           return
         }
 
-        // Fetch all data needed
+        // 2 queries optimizadas en lugar de 5:
+        // 1. Estudiantes ordenados
+        // 2. Vista de calificaciones (todo precalculado en SQL)
         const [
           { data: estudiantesData },
-          { data: asistenciasData },
-          { data: extrasData },
-          { data: actividadesData },
-          { data: entregasData },
+          { data: calificacionesData },
         ] = await Promise.all([
           supabase.from('estudiantes').select('*').order('apellido', { ascending: true }),
-          supabase.from('asistencias').select('estudiante_id, estado'),
-          supabase.from('extras').select('estudiante_id, puntos'),
-          supabase.from('actividad_participantes').select('estudiante_id, actividades(ponderacion)'),
-          supabase.from('presentaciones_entregas').select('estudiante_id, nota').eq('estado', 'revisado'),
+          supabase.from('vista_calificaciones').select('*'),
         ])
 
         if (!estudiantesData) return
 
+        // Mapear calificaciones por estudiante_id para acceso O(1)
+        const calificacionesMap = new Map(
+          (calificacionesData || []).map(c => [c.estudiante_id, c])
+        )
+
         const reporte = estudiantesData.map(est => {
-          // Asistencias
-          const presences = (asistenciasData || []).filter(
-            a => a.estudiante_id === est.id && a.estado === 'presente'
-          ).length
-          const notaAsistencia = Math.min((presences / TOTAL_CLASES) * PUNTOS_MAXIMOS, PUNTOS_MAXIMOS)
-
-          // Extras
-          const extras = (extrasData || [])
-            .filter(e => e.estudiante_id === est.id)
-            .reduce((acc, curr) => acc + (Number(curr.puntos) || 0), 0)
-
-          // Actividades
-          const actividades = (actividadesData || [])
-            .filter(a => a.estudiante_id === est.id)
-            .reduce((acc, curr) => {
-              const act = Array.isArray(curr.actividades) ? curr.actividades[0] : curr.actividades
-              return acc + (Number(act?.ponderacion) || 0)
-            }, 0)
-
-          // Presentaciones
-          const presentaciones = (entregasData || [])
-            .filter(e => e.estudiante_id === est.id)
-            .reduce((acc, curr) => acc + (Number(curr.nota) || 0), 0)
-
-          const notaFinal = notaAsistencia + extras + actividades + presentaciones
+          const cal = calificacionesMap.get(est.id)
 
           return {
             ...est,
-            notaAsistencia,
-            puntosExtra: extras,
-            puntosActividades: actividades,
-            puntosPresentaciones: presentaciones,
-            notaFinal
+            notaAsistencia: Number(cal?.nota_asistencia) || 0,
+            puntosExtra: Number(cal?.puntos_extra) || 0,
+            puntosActividades: Number(cal?.puntos_actividades) || 0,
+            puntosPresentaciones: Number(cal?.puntos_presentaciones) || 0,
+            notaFinal: Number(cal?.nota_final) || 0,
           }
         })
 

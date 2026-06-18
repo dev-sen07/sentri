@@ -16,6 +16,7 @@ import {
   Activity,
   FileUp,
   FileText,
+  GraduationCap,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -94,6 +95,7 @@ export function AppSidebar() {
       { title: 'Ver Prácticas', url: '/practicas', icon: BookOpen },
       { title: 'Presentaciones', url: '/presentar-practicas', icon: FileUp },
       { title: 'Reporte Final', url: '/reporte-estudiantes', icon: FileText },
+      { title: 'Liberación', url: '/liberacion', icon: GraduationCap },
       { title: 'Clases Grabadas', url: '/clases-grabadas', icon: Video },
     ]
 

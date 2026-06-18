@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase, EstudianteRow } from "@/lib/supabase";
+import { supabase, EstudianteRow, VistaCalificacionesRow } from "@/lib/supabase";
 import {
   Card,
   CardContent,
@@ -40,27 +40,17 @@ import {
   FileUp,
 } from "lucide-react";
 
-const TOTAL_CLASES = 10;
-const PUNTOS_MAXIMOS = 10;
-
 export default function MiPerfilPage() {
   const router = useRouter();
   const [estudiante, setEstudiante] = useState<EstudianteRow | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Attendance stats
-  const [asistenciasPresente, setAsistenciasPresente] = useState(0);
-  const [loadingAsistencias, setLoadingAsistencias] = useState(true);
+  // Calificaciones desde la vista SQL (una sola query)
+  const [calificacion, setCalificacion] = useState<VistaCalificacionesRow | null>(null);
+  const [loadingNotas, setLoadingNotas] = useState(true);
 
-  // Extras and Activities stats
-  const [puntosExtra, setPuntosExtra] = useState(0);
-  const [puntosActividades, setPuntosActividades] = useState(0);
-  const [loadingExtras, setLoadingExtras] = useState(true);
-
-  // Presentaciones stats
-  const [puntosPresentaciones, setPuntosPresentaciones] = useState(0);
+  // Detalle de presentaciones (para el desglose individual)
   const [presentacionesRevisadas, setPresentacionesRevisadas] = useState<{titulo: string; nota: number; ponderacion: number}[]>([]);
-  const [loadingPresentaciones, setLoadingPresentaciones] = useState(true);
 
   // Change password dialog
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
@@ -105,50 +95,18 @@ export default function MiPerfilPage() {
         if (estudianteData) {
           setEstudiante(estudianteData);
 
-          // Fetch attendance count
-          const { data: asistenciasData } = await supabase
-            .from("asistencias")
-            .select("id, estado")
-            .eq("estudiante_id", estudianteData.id);
+          // 1 query: obtener calificaciones consolidadas desde la vista SQL
+          const { data: calificacionData } = await supabase
+            .from("vista_calificaciones")
+            .select("*")
+            .eq("estudiante_id", estudianteData.id)
+            .single();
 
-          if (asistenciasData) {
-            const presentes = asistenciasData.filter(
-              (a) => a.estado === "presente",
-            ).length;
-            setAsistenciasPresente(presentes);
+          if (calificacionData) {
+            setCalificacion(calificacionData);
           }
 
-          // Fetch Extras
-          const { data: extrasData } = await supabase
-            .from("extras")
-            .select("puntos")
-            .eq("estudiante_id", estudianteData.id);
-
-          if (extrasData) {
-            const sumaExtras = extrasData.reduce(
-              (acc, curr) => acc + (Number(curr.puntos) || 0),
-              0,
-            );
-            setPuntosExtra(sumaExtras);
-          }
-
-          // Fetch Actividades
-          const { data: actividadesData } = await supabase
-            .from("actividad_participantes")
-            .select("actividades(ponderacion)")
-            .eq("estudiante_id", estudianteData.id);
-
-          if (actividadesData) {
-            const sumaActividades = actividadesData.reduce((acc, curr) => {
-              const act = Array.isArray(curr.actividades)
-                ? curr.actividades[0]
-                : curr.actividades;
-              return acc + (Number(act?.ponderacion) || 0);
-            }, 0);
-            setPuntosActividades(sumaActividades);
-          }
-
-          // Fetch Presentaciones revisadas
+          // Query de detalle de presentaciones (para mostrar desglose individual)
           const { data: entregasData } = await supabase
             .from("presentaciones_entregas")
             .select("nota, tarea_id")
@@ -172,8 +130,6 @@ export default function MiPerfilPage() {
                 };
               });
               setPresentacionesRevisadas(detalles);
-              const suma = detalles.reduce((acc, d) => acc + d.nota, 0);
-              setPuntosPresentaciones(suma);
             }
           }
         }
@@ -181,9 +137,7 @@ export default function MiPerfilPage() {
         console.error("Error:", error);
       } finally {
         setLoading(false);
-        setLoadingAsistencias(false);
-        setLoadingExtras(false);
-        setLoadingPresentaciones(false);
+        setLoadingNotas(false);
       }
     };
     checkAuthAndFetchData();
@@ -280,15 +234,18 @@ export default function MiPerfilPage() {
   const getInitials = (nombre: string, apellido: string) =>
     `${nombre.charAt(0)}${apellido.charAt(0)}`.toUpperCase();
 
-  // Grade calculation: (presentes / 15) * 10, max 10
-  const notaAsistencia = Math.min(
-    (asistenciasPresente / TOTAL_CLASES) * PUNTOS_MAXIMOS,
-    PUNTOS_MAXIMOS,
-  );
-  const notaFormateada = notaAsistencia.toFixed(2);
+  // Valores de la vista SQL (o defaults si aún no carga)
+  const notaAsistencia = calificacion?.nota_asistencia ?? 0;
+  const asistenciasPresente = calificacion?.asistencias_presente ?? 0;
+  const totalClases = calificacion?.total_clases ?? 10;
+  const puntosExtra = calificacion?.puntos_extra ?? 0;
+  const puntosActividades = calificacion?.puntos_actividades ?? 0;
+  const puntosPresentaciones = calificacion?.puntos_presentaciones ?? 0;
+  const notaFinal = calificacion?.nota_final ?? 0;
 
+  const notaFormateada = notaAsistencia.toFixed(2);
   const porcentajeAsistencia = Math.min(
-    (asistenciasPresente / TOTAL_CLASES) * 100,
+    (asistenciasPresente / totalClases) * 100,
     100,
   );
 
@@ -460,7 +417,7 @@ export default function MiPerfilPage() {
                       {notaFormateada} pts
                     </span>
                   </h3>
-                  {loadingAsistencias ? (
+                  {loadingNotas ? (
                     <div className="h-10 flex items-center justify-center">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
                     </div>
@@ -470,7 +427,7 @@ export default function MiPerfilPage() {
                         <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
                           <span>Progreso de clases asistidas</span>
                           <span>
-                            {asistenciasPresente} / {TOTAL_CLASES} (
+                            {asistenciasPresente} / {totalClases} (
                             {porcentajeAsistencia.toFixed(0)}%)
                           </span>
                         </div>
@@ -481,7 +438,7 @@ export default function MiPerfilPage() {
                           />
                         </div>
                       </div>
-                      {asistenciasPresente >= TOTAL_CLASES && (
+                      {asistenciasPresente >= totalClases && (
                         <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-3 py-2 rounded-lg">
                           <CheckCircle className="w-4 h-4 shrink-0" />
                           ¡Asistencia completa! Tienes los 10 puntos de
@@ -502,13 +459,13 @@ export default function MiPerfilPage() {
                       <Star className="w-4 h-4 text-amber-500" />
                       Puntos Extra
                     </h3>
-                    {!loadingExtras && (
+                    {!loadingNotas && (
                       <span className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400 px-3 py-1 rounded-full text-sm font-bold border border-amber-200 dark:border-amber-800">
-                        +{puntosExtra + puntosActividades} pts totales
+                        +{(puntosExtra + puntosActividades).toFixed(2)} pts totales
                       </span>
                     )}
                   </div>
-                  {loadingExtras ? (
+                  {loadingNotas ? (
                     <div className="h-10 flex items-center justify-center">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
                     </div>
@@ -544,13 +501,13 @@ export default function MiPerfilPage() {
                       <FileUp className="w-4 h-4 text-teal-500" />
                       Presentaciones
                     </h3>
-                    {!loadingPresentaciones && (
+                    {!loadingNotas && (
                       <span className="bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-400 px-3 py-1 rounded-full text-sm font-bold border border-teal-200 dark:border-teal-800">
                         +{puntosPresentaciones} pts
                       </span>
                     )}
                   </div>
-                  {loadingPresentaciones ? (
+                  {loadingNotas ? (
                     <div className="h-10 flex items-center justify-center">
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
                     </div>
@@ -591,19 +548,14 @@ export default function MiPerfilPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {loadingAsistencias || loadingExtras || loadingPresentaciones ? (
+                {loadingNotas ? (
                   <div className="h-24 flex items-center justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                   </div>
                 ) : (
                   <div className="text-center py-6">
                     <span className="text-6xl font-black tabular-nums text-foreground">
-                      {(
-                        notaAsistencia +
-                        puntosExtra +
-                        puntosActividades +
-                        puntosPresentaciones
-                      ).toFixed(2)}
+                      {notaFinal.toFixed(2)}
                     </span>
                     <span className="text-lg font-semibold text-muted-foreground block mt-1">
                       Puntos Acumulados

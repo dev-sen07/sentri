@@ -8,7 +8,7 @@ export function ClientLayoutWrapper({ children }: { children: React.ReactNode })
   const pathname = usePathname()
   
   // Hide sidebar on the login page or any other auth pages
-  const isAuthPage = pathname === '/login' || pathname === '/register'
+  const isAuthPage = pathname === '/login' || pathname === '/register' || pathname === '/liberacion'
   
   if (isAuthPage) {
     return <main className="flex-1 w-full h-screen relative">{children}</main>

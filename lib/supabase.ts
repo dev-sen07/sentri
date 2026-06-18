@@ -141,3 +141,38 @@ export type PresentacionEntregaRow = {
   entregado_en: string
   revisado_en: string | null
 }
+
+export type ConfiguracionNotasRow = {
+  id: string
+  clave: string
+  valor: number
+  descripcion: string | null
+  updated_at: string
+}
+
+export type VistaCalificacionesRow = {
+  estudiante_id: string
+  asistencias_presente: number
+  total_clases: number
+  nota_asistencia: number
+  puntos_extra: number
+  puntos_actividades: number
+  puntos_presentaciones: number
+  nota_final: number
+}
+
+export type LiberacionRow = {
+  id: string
+  nombre: string
+  ru: string
+  nota: number | null
+  horario_seleccionado: string | null
+  estado: 'pendiente' | 'confirmado' | 'en_examen' | 'finalizado'
+  examen_pdf_url: string | null
+  examen_pdf_file_id: string | null
+  archivos_respuesta: ArchivoMetadata[] | null
+  drive_folder_id: string | null
+  confirmado_en: string | null
+  finalizado_en: string | null
+  creado_en: string
+}
