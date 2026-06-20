@@ -19,6 +19,36 @@ import {
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPER MAPPING FUNCTION
+   ═══════════════════════════════════════════════════════════════ */
+
+function mapRawToLiberacionRow(raw: any): LiberacionRow {
+  return {
+    id: raw.id,
+    nombre: raw.nombre,
+    ru: raw.ru,
+    nota: raw.nota,
+    horario_seleccionado: raw.horario_seleccionado,
+    estado: raw.estado,
+    examen_pdf_url: raw.examen_contenido?.pdf_url ?? null,
+    examen_pdf_file_id: raw.examen_contenido?.pdf_file_id ?? null,
+    archivos_respuesta: raw.examen_respuesta?.archivos ?? null,
+    drive_folder_id: raw.examen_respuesta?.drive_folder_id ?? null,
+    confirmado_en: raw.confirmado_en,
+    finalizado_en: raw.examen_respuesta?.finalizado_en ?? null,
+    creado_en: raw.creado_en,
+  }
+}
+
+import {
   GraduationCap,
   Search,
   AlertTriangle,
@@ -49,10 +79,10 @@ const HORARIOS = [
   {
     id: 'sab-10',
     label: 'Sábado 20/06/2026',
-    hora: '10:00 - 12:00',
+    hora: '10:00 - 15:00',
     dia: 'Sábado',
     inicio: new Date('2026-06-20T10:00:00-04:00'),
-    fin: new Date('2026-06-20T12:00:00-04:00'),
+    fin: new Date('2026-06-20T15:00:00-04:00'),
   },
   {
     id: 'sab-18',
@@ -201,7 +231,7 @@ function EstudianteLiberacionView() {
         return
       }
 
-      const libData = data as LiberacionRow
+      const libData = mapRawToLiberacionRow(data)
 
       // Inner join: buscar estudiante por RU → obtener nota actual desde vista_calificaciones
       let nota: number | null = null
@@ -266,12 +296,23 @@ function EstudianteLiberacionView() {
     if (!horario) return
 
     try {
+      // 1. Fetch current config for the chosen schedule
+      const { data: configData } = await supabase
+        .from('liberaciones')
+        .select('examen_contenido')
+        .eq('ru', `CONFIG_${horarioId}`)
+        .maybeSingle()
+
+      const examContenido = configData?.examen_contenido || null
+
+      // 2. Update student row
       const { error: updateError } = await supabase
         .from('liberaciones')
         .update({
           horario_seleccionado: horarioId,
           estado: 'confirmado',
           confirmado_en: new Date().toISOString(),
+          examen_contenido: examContenido
         })
         .eq('id', estudiante.id)
 
@@ -282,6 +323,8 @@ function EstudianteLiberacionView() {
         horario_seleccionado: horarioId,
         estado: 'confirmado',
         confirmado_en: new Date().toISOString(),
+        examen_pdf_url: examContenido?.pdf_url || null,
+        examen_pdf_file_id: examContenido?.pdf_file_id || null,
       })
     } catch {
       setError('Error al confirmar horario. Intente nuevamente.')
@@ -603,48 +646,62 @@ function SeleccionHorarioView({
         </p>
 
         <div className="grid gap-3">
-          {HORARIOS.map((horario) => (
-            <Card
-              key={horario.id}
-              className={`cursor-pointer transition-all duration-200 border-2 ${
-                selectedHorario === horario.id
-                  ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/10'
-                  : 'border-white/10 bg-black/30 hover:border-white/20 hover:bg-white/5'
-              }`}
-              onClick={() => setSelectedHorario(horario.id)}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                      selectedHorario === horario.id
-                        ? 'bg-amber-500/30 text-amber-300'
-                        : 'bg-white/5 text-white/40'
+          {HORARIOS.map((horario) => {
+            const isPast = new Date() > horario.fin
+            return (
+              <Card
+                key={horario.id}
+                className={`transition-all duration-200 border-2 ${
+                  isPast 
+                    ? 'border-white/5 bg-black/50 opacity-60 cursor-not-allowed'
+                    : selectedHorario === horario.id
+                      ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/10 cursor-pointer'
+                      : 'border-white/10 bg-black/30 hover:border-white/20 hover:bg-white/5 cursor-pointer'
+                }`}
+                onClick={() => !isPast && setSelectedHorario(horario.id)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                        isPast
+                          ? 'bg-white/5 text-white/20'
+                          : selectedHorario === horario.id
+                            ? 'bg-amber-500/30 text-amber-300'
+                            : 'bg-white/5 text-white/40'
+                      }`}>
+                        <Clock className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className={`font-semibold ${isPast ? 'text-white/40' : selectedHorario === horario.id ? 'text-amber-300' : 'text-white'}`}>
+                            {horario.label}
+                          </p>
+                          {isPast && (
+                            <span className="text-[10px] px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded border border-red-500/20">Finalizado</span>
+                          )}
+                        </div>
+                        <p className={`text-sm ${isPast ? 'text-white/30' : selectedHorario === horario.id ? 'text-amber-200/70' : 'text-white/50'}`}>
+                          {horario.hora}
+                        </p>
+                      </div>
+                    </div>
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                      isPast
+                        ? 'border-white/10'
+                        : selectedHorario === horario.id
+                          ? 'border-amber-500 bg-amber-500'
+                          : 'border-white/20'
                     }`}>
-                      <Clock className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className={`font-semibold ${selectedHorario === horario.id ? 'text-amber-300' : 'text-white'}`}>
-                        {horario.label}
-                      </p>
-                      <p className={`text-sm ${selectedHorario === horario.id ? 'text-amber-200/70' : 'text-white/50'}`}>
-                        {horario.hora}
-                      </p>
+                      {selectedHorario === horario.id && (
+                        <CheckCircle className="w-4 h-4 text-white" />
+                      )}
                     </div>
                   </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                    selectedHorario === horario.id
-                      ? 'border-amber-500 bg-amber-500'
-                      : 'border-white/20'
-                  }`}>
-                    {selectedHorario === horario.id && (
-                      <CheckCircle className="w-4 h-4 text-white" />
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
 
         <Button
@@ -854,8 +911,17 @@ function ExamenPresentacionView({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const horario = HORARIOS.find(h => h.id === estudiante.horario_seleccionado)
+  const [now, setNow] = useState(new Date())
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const isPast = horario ? now > horario.fin : false
 
   const handleFiles = async (files: FileList | File[]) => {
+    if (isPast) return
     setError(null)
     const fileArray = Array.from(files)
 
@@ -897,6 +963,7 @@ function ExamenPresentacionView({
   }
 
   const handleRemoveFile = async (index: number) => {
+    if (isPast) return
     const file = archivos[index]
     try {
       await fetch('/api/storage/delete', {
@@ -918,13 +985,16 @@ function ExamenPresentacionView({
 
     setSaving(true)
     try {
+      const finalizadoEn = new Date().toISOString()
       const { error: updateError } = await supabase
         .from('liberaciones')
         .update({
-          archivos_respuesta: archivos,
-          drive_folder_id: driveFolderId,
+          examen_respuesta: {
+            archivos: archivos,
+            drive_folder_id: driveFolderId,
+            finalizado_en: finalizadoEn,
+          },
           estado: 'finalizado',
-          finalizado_en: new Date().toISOString(),
         })
         .eq('id', estudiante.id)
 
@@ -935,7 +1005,7 @@ function ExamenPresentacionView({
         archivos_respuesta: archivos,
         drive_folder_id: driveFolderId,
         estado: 'finalizado',
-        finalizado_en: new Date().toISOString(),
+        finalizado_en: finalizadoEn,
       })
     } catch {
       setError('Error al guardar la entrega')
@@ -1024,8 +1094,9 @@ function ExamenPresentacionView({
                   <Button
                     variant="ghost"
                     size="sm"
+                    disabled={isPast}
                     onClick={() => handleRemoveFile(i)}
-                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10 disabled:opacity-50"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -1037,46 +1108,57 @@ function ExamenPresentacionView({
       )}
 
       {/* Upload zone */}
-      <div
-        className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-200 cursor-pointer ${
-          dragOver
-            ? 'border-amber-500 bg-amber-500/10 scale-[1.01]'
-            : 'border-white/15 hover:border-amber-400/50 hover:bg-white/5'
-        }`}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-        onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => {
-          e.preventDefault()
-          setDragOver(false)
-          handleFiles(e.dataTransfer.files)
-        }}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".py,.pdf"
-          className="hidden"
-          onChange={(e) => e.target.files && handleFiles(e.target.files)}
-        />
-        {uploading ? (
-          <div className="flex flex-col items-center gap-3">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500"></div>
-            <p className="text-sm text-white/50">Subiendo archivos...</p>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-3">
-            <div className="p-4 bg-amber-500/10 rounded-2xl">
-              <Upload className="w-8 h-8 text-amber-400" />
+      {isPast ? (
+        <div className="p-6 text-center border-2 border-dashed border-red-500/30 bg-red-500/5 rounded-2xl">
+          <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-3" />
+          <h3 className="text-lg font-bold text-white mb-1">Tiempo concluido</h3>
+          <p className="text-sm text-red-200/70">
+            El horario de su examen ha finalizado. Ya no es posible modificar ni subir más archivos.
+          </p>
+        </div>
+      ) : (
+        <div
+          className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-200 cursor-pointer ${
+            dragOver
+              ? 'border-amber-500 bg-amber-500/10 scale-[1.01]'
+              : 'border-white/15 hover:border-amber-400/50 hover:bg-white/5'
+          }`}
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setDragOver(false)
+            handleFiles(e.dataTransfer.files)
+          }}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".py,.pdf"
+            className="hidden"
+            onChange={(e) => e.target.files && handleFiles(e.target.files)}
+          />
+          {uploading ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500"></div>
+              <p className="text-sm text-white/50">Subiendo archivos...</p>
             </div>
-            <div>
-              <p className="font-medium text-white">Arrastra archivos aquí o haz clic para seleccionar</p>
-              <p className="text-sm text-white/40 mt-1">Solo archivos .py y .pdf (máximo 5MB)</p>
+          ) : (
+            <div className="flex flex-col items-center gap-3">
+              <div className="p-4 bg-amber-500/10 rounded-2xl">
+                <Upload className="w-8 h-8 text-amber-400" />
+              </div>
+              <div>
+                <p className="font-medium text-white">Arrastra archivos aquí o haz clic para seleccionar</p>
+                <p className="text-sm text-white/40 mt-1">Solo archivos .py y .pdf (máximo 5MB)</p>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
+
 
       {error && (
         <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/30 px-4 py-3 rounded-lg">
@@ -1242,17 +1324,54 @@ function AuxiliarLiberacionView() {
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 10
 
+  // Schedule-specific exam states
+  const [dialogHorarioId, setDialogHorarioId] = useState(HORARIOS[0].id)
+  const [currentConfig, setCurrentConfig] = useState<{ pdf_url: string; pdf_file_id: string; pdf_name?: string } | null>(null)
+  const [loadingConfig, setLoadingConfig] = useState(false)
+  const [deletingPdf, setDeletingPdf] = useState(false)
+
   const fetchEstudiantes = useCallback(async () => {
     const { data } = await supabase
       .from('liberaciones')
       .select('*')
       .order('creado_en', { ascending: false })
 
-    if (data) setEstudiantes(data as LiberacionRow[])
+    if (data) {
+      const studentRows = data
+        .filter((r: any) => !r.ru.startsWith('CONFIG_'))
+        .map(mapRawToLiberacionRow)
+      setEstudiantes(studentRows)
+    }
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchEstudiantes() }, [fetchEstudiantes])
+
+  // Fetch current config when dialogHorarioId or showUploadExamen changes
+  useEffect(() => {
+    if (!showUploadExamen) return
+    const fetchConfig = async () => {
+      setLoadingConfig(true)
+      try {
+        const { data } = await supabase
+          .from('liberaciones')
+          .select('examen_contenido')
+          .eq('ru', `CONFIG_${dialogHorarioId}`)
+          .maybeSingle()
+
+        if (data?.examen_contenido) {
+          setCurrentConfig(data.examen_contenido as any)
+        } else {
+          setCurrentConfig(null)
+        }
+      } catch (err) {
+        console.error(err)
+      } finally {
+        setLoadingConfig(false)
+      }
+    }
+    fetchConfig()
+  }, [dialogHorarioId, showUploadExamen])
 
   const handleUploadExamen = async () => {
     if (!pdfFile) return
@@ -1261,7 +1380,7 @@ function AuxiliarLiberacionView() {
     try {
       const formData = new FormData()
       formData.append('studentName', 'Liberacion')
-      formData.append('taskTitle', 'Examen-Liberacion')
+      formData.append('taskTitle', `Examen-${dialogHorarioId}`)
       formData.append('files', pdfFile)
 
       const res = await fetch('/api/storage/upload', { method: 'POST', body: formData })
@@ -1274,17 +1393,47 @@ function AuxiliarLiberacionView() {
 
       const pdfUrl = data.files[0].drive_url
       const pdfFileId = data.files[0].drive_file_id
+      const pdfName = pdfFile.name
 
-      // Update ALL students with the exam PDF
-      const { error } = await supabase
+      const configRu = `CONFIG_${dialogHorarioId}`
+      const examContenido = { pdf_url: pdfUrl, pdf_file_id: pdfFileId, pdf_name: pdfName }
+
+      // 1. Check if config row already exists
+      const { data: existingConfig } = await supabase
+        .from('liberaciones')
+        .select('id')
+        .eq('ru', configRu)
+        .maybeSingle()
+
+      if (existingConfig) {
+        const { error: errUpdate } = await supabase
+          .from('liberaciones')
+          .update({
+            examen_contenido: examContenido
+          })
+          .eq('ru', configRu)
+        if (errUpdate) throw errUpdate
+      } else {
+        const { error: errInsert } = await supabase
+          .from('liberaciones')
+          .insert({
+            nombre: `Config Examen ${dialogHorarioId}`,
+            ru: configRu,
+            estado: 'pendiente',
+            examen_contenido: examContenido
+          })
+        if (errInsert) throw errInsert
+      }
+
+      // 2. Update all students with this schedule selection
+      const { error: errStudents } = await supabase
         .from('liberaciones')
         .update({
-          examen_pdf_url: pdfUrl,
-          examen_pdf_file_id: pdfFileId,
+          examen_contenido: examContenido
         })
-        .neq('estado', 'dummy_never_match') // match all rows
+        .eq('horario_seleccionado', dialogHorarioId)
 
-      if (error) throw error
+      if (errStudents) throw errStudents
 
       setShowUploadExamen(false)
       setPdfFile(null)
@@ -1294,6 +1443,51 @@ function AuxiliarLiberacionView() {
       alert('Error al subir el examen')
     } finally {
       setUploadingPdf(false)
+    }
+  }
+
+  const handleDeleteExamen = async () => {
+    if (!currentConfig) return
+    if (!confirm('¿Está seguro de eliminar el examen para este horario? Todos los estudiantes de este horario perderán el acceso al examen.')) return
+
+    setDeletingPdf(true)
+    try {
+      // 1. Delete from Drive
+      if (currentConfig.pdf_file_id) {
+        await fetch('/api/storage/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fileId: currentConfig.pdf_file_id }),
+        })
+      }
+
+      const configRu = `CONFIG_${dialogHorarioId}`
+
+      // 2. Clear config row examen_contenido
+      const { error: errUpdateConfig } = await supabase
+        .from('liberaciones')
+        .update({
+          examen_contenido: null
+        })
+        .eq('ru', configRu)
+      if (errUpdateConfig) throw errUpdateConfig
+
+      // 3. Clear students' examen_contenido
+      const { error: errUpdateStudents } = await supabase
+        .from('liberaciones')
+        .update({
+          examen_contenido: null
+        })
+        .eq('horario_seleccionado', dialogHorarioId)
+      if (errUpdateStudents) throw errUpdateStudents
+
+      setCurrentConfig(null)
+      fetchEstudiantes()
+    } catch (err) {
+      console.error(err)
+      alert('Error al eliminar el examen')
+    } finally {
+      setDeletingPdf(false)
     }
   }
 
@@ -1680,7 +1874,7 @@ function AuxiliarLiberacionView() {
         </Tabs>
 
         {/* Upload Exam Dialog */}
-        <AlertDialog open={showUploadExamen} onOpenChange={setShowUploadExamen}>
+        <AlertDialog open={showUploadExamen} onOpenChange={(open) => { setShowUploadExamen(open); if (!open) setPdfFile(null); }}>
           <AlertDialogContent className="max-w-md">
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2">
@@ -1688,69 +1882,128 @@ function AuxiliarLiberacionView() {
                 Cargar Examen de Liberación
               </AlertDialogTitle>
               <AlertDialogDescription>
-                Suba el PDF con las instrucciones del examen. Se aplicará a todos los estudiantes registrados.
+                Suba el PDF con las instrucciones del examen por horario. Se aplicará a todos los estudiantes que seleccionen este horario.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <div className="py-4">
-              <div
-                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200 ${
-                  pdfFile
-                    ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20'
-                    : 'border-border hover:border-amber-400 hover:bg-muted/30'
-                }`}
-                onClick={() => pdfInputRef.current?.click()}
-              >
-                <input
-                  ref={pdfInputRef}
-                  type="file"
-                  accept=".pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file && file.name.toLowerCase().endsWith('.pdf')) {
-                      setPdfFile(file)
-                    }
-                  }}
-                />
-                {pdfFile ? (
-                  <div className="flex items-center justify-center gap-3">
-                    <FileText className="w-5 h-5 text-red-500" />
-                    <span className="text-sm font-medium truncate">{pdfFile.name}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-red-500 hover:text-red-700 h-7 px-2"
-                      onClick={(e) => { e.stopPropagation(); setPdfFile(null) }}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-2">
-                    <Upload className="w-8 h-8 text-muted-foreground/50" />
-                    <p className="text-sm text-muted-foreground">Haz clic para subir el PDF del examen</p>
-                  </div>
-                )}
+
+            <div className="space-y-4 py-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="horario-select">Horario de Examen</Label>
+                <Select value={dialogHorarioId} onValueChange={setDialogHorarioId}>
+                  <SelectTrigger id="horario-select">
+                    <SelectValue placeholder="Seleccione un horario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {HORARIOS.map((horario) => (
+                      <SelectItem key={horario.id} value={horario.id}>
+                        {horario.label} ({horario.hora})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+
+              {loadingConfig ? (
+                <div className="flex items-center justify-center py-6">
+                  <span className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-500"></span>
+                  <span className="ml-2 text-sm text-muted-foreground">Cargando configuración...</span>
+                </div>
+              ) : currentConfig ? (
+                <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <FileText className="w-5 h-5 text-red-500 flex-shrink-0" />
+                    <div className="text-left min-w-0">
+                      <p className="text-sm font-medium truncate max-w-[220px]">
+                        {currentConfig.pdf_name || 'Examen Cargado.pdf'}
+                      </p>
+                      <a
+                        href={currentConfig.pdf_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-amber-500 hover:underline inline-flex items-center gap-1 mt-0.5"
+                      >
+                        Ver PDF <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-500 hover:text-red-700 hover:bg-red-500/10 h-8 px-2 flex-shrink-0"
+                    disabled={deletingPdf}
+                    onClick={handleDeleteExamen}
+                  >
+                    {deletingPdf ? (
+                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></span>
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200 ${
+                    pdfFile
+                      ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/20'
+                      : 'border-border hover:border-amber-400 hover:bg-muted/30'
+                  }`}
+                  onClick={() => pdfInputRef.current?.click()}
+                >
+                  <input
+                    ref={pdfInputRef}
+                    type="file"
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file && file.name.toLowerCase().endsWith('.pdf')) {
+                        setPdfFile(file)
+                      }
+                    }}
+                  />
+                  {pdfFile ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <FileText className="w-5 h-5 text-red-500" />
+                      <span className="text-sm font-medium truncate max-w-[200px]">{pdfFile.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:text-red-700 h-7 px-2"
+                        onClick={(e) => { e.stopPropagation(); setPdfFile(null) }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <Upload className="w-8 h-8 text-muted-foreground/50" />
+                      <p className="text-sm text-muted-foreground">Haz clic para subir el PDF del examen</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+
             <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <Button
-                onClick={handleUploadExamen}
-                disabled={uploadingPdf || !pdfFile}
-                className="bg-amber-600 hover:bg-amber-700"
-              >
-                {uploadingPdf ? (
-                  <span className="flex items-center gap-2">
-                    <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
-                    Subiendo...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    <Upload className="w-4 h-4" /> Publicar Examen
-                  </span>
-                )}
-              </Button>
+              <AlertDialogCancel onClick={() => setPdfFile(null)}>Cancelar</AlertDialogCancel>
+              {!currentConfig && (
+                <Button
+                  onClick={handleUploadExamen}
+                  disabled={uploadingPdf || !pdfFile}
+                  className="bg-amber-600 hover:bg-amber-700"
+                >
+                  {uploadingPdf ? (
+                    <span className="flex items-center gap-2">
+                      <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>
+                      Subiendo...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Upload className="w-4 h-4" /> Publicar Examen
+                    </span>
+                  )}
+                </Button>
+              )}
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
