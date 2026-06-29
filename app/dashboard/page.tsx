@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import {
-  Users, CheckSquare, History, Code, User, LayoutDashboard, BookOpen, FileUp, FileText
+  Users, CheckSquare, History, Code, User, LayoutDashboard, BookOpen, FileUp, FileText, GraduationCap
 } from 'lucide-react'
 
 const AUXILIAR_CARDS = [
@@ -60,6 +60,16 @@ const AUXILIAR_CARDS = [
     border: 'border-pink-200 dark:border-pink-900',
     iconColor: 'text-pink-600 dark:text-pink-400',
     iconBg: 'bg-pink-100 dark:bg-pink-900/40',
+  },
+  {
+    title: 'Reporte Liberación',
+    description: 'Exportar notas del examen de liberación a Excel',
+    href: '/reporte-liberacion',
+    icon: GraduationCap,
+    gradient: 'from-amber-500/20 to-orange-500/10',
+    border: 'border-amber-200 dark:border-amber-900',
+    iconColor: 'text-amber-600 dark:text-amber-400',
+    iconBg: 'bg-amber-100 dark:bg-amber-900/40',
   },
 ]
 
