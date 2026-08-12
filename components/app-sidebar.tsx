@@ -7,16 +7,13 @@ import {
   History,
   LayoutDashboard,
   User,
-  LogOut,
-  Code,
-  BookOpen,
   Sparkles,
   Video,
   Star,
   Activity,
-  FileUp,
   FileText,
-  GraduationCap,
+  FlaskConical,
+  LogOut,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -92,17 +89,14 @@ export function AppSidebar() {
       { title: 'Estudiantes', url: '/estudiantes', icon: Users },
       { title: 'Marcar Asistencia', url: '/marcar-asistencia', icon: CheckSquare },
       { title: 'Extras', url: '/extras', icon: Star },
-      { title: 'Ver Prácticas', url: '/practicas', icon: BookOpen },
-      { title: 'Presentaciones', url: '/presentar-practicas', icon: FileUp },
+      { title: 'Laboratorio', url: '/practicas', icon: FlaskConical },
       { title: 'Reporte Final', url: '/reporte-estudiantes', icon: FileText },
-      { title: 'Liberación', url: '/liberacion', icon: GraduationCap },
       { title: 'Clases Grabadas', url: '/clases-grabadas', icon: Video },
     ]
 
     const estudianteNav = [
       { title: 'Mis Asistencias', url: '/mis-asistencias', icon: History },
-      { title: 'Prácticas', url: '/practicas', icon: Code },
-      { title: 'Presentar Prácticas', url: '/presentar-practicas', icon: FileUp },
+      { title: 'Laboratorio', url: '/practicas', icon: FlaskConical },
       { title: 'Clases Grabadas', url: '/clases-grabadas', icon: Video },
       { title: 'Mi Perfil', url: '/mi-perfil', icon: User },
     ]

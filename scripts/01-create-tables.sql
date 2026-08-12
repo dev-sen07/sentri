@@ -1,153 +1,210 @@
--- =========================
--- CREAR EXTENSIÓN UUID
--- =========================
-create extension if not exists "uuid-ossp";
-
--- =========================
--- TABLA DE ROLES
--- =========================
-create table if not exists roles (
-  id text primary key,
-  nombre text not null
+CREATE TABLE public.roles (
+  id     TEXT PRIMARY KEY,
+  nombre TEXT NOT NULL
 );
 
-insert into roles (id, nombre) values 
+INSERT INTO public.roles (id, nombre) VALUES
   ('estudiante', 'Estudiante'),
-  ('auxiliar', 'Auxiliar')
-on conflict do nothing;
+  ('auxiliar',   'Auxiliar de la materia'),
+  ('delegado',   'Delegado de Curso');
 
--- =========================
--- TABLA DE USUARIOS CON ROLES
--- =========================
-create table if not exists usuarios_roles (
-  id uuid primary key default uuid_generate_v4(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  rol text not null references roles(id),
-  created_at timestamp default now()
+-- ─────────────────────────────────────────
+-- usuarios_roles: asignación rol ↔ usuario auth
+-- Un usuario solo puede tener UN rol activo (UNIQUE user_id)
+-- ─────────────────────────────────────────
+CREATE TABLE public.usuarios_roles (
+  id         UUID      PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id    UUID      NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  rol        TEXT      NOT NULL REFERENCES public.roles(id),
+  created_at TIMESTAMP DEFAULT now(),
+  CONSTRAINT uq_usuario_rol UNIQUE (user_id)
 );
 
--- =========================
--- TABLA DE ESTUDIANTES
--- =========================
-create table if not exists estudiantes (
-  id uuid primary key default uuid_generate_v4(),
-  nombre text not null,
-  apellido text not null,
-  ci text unique,
-  ru text unique,
-  correo text unique not null,
-  user_id uuid unique references auth.users(id) on delete set null,
-  created_at timestamp default now()
+-- ─────────────────────────────────────────
+-- estudiantes: datos del alumno
+-- ─────────────────────────────────────────
+CREATE TABLE public.estudiantes (
+  id         UUID      PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nombre     TEXT      NOT NULL,
+  apellido   TEXT      NOT NULL,
+  ci         TEXT      UNIQUE,
+  ru         TEXT      UNIQUE,
+  correo     TEXT      NOT NULL UNIQUE,
+  codigo     TEXT      UNIQUE,
+  paralelo   TEXT      CHECK (paralelo IN ('A', 'B', 'C')),
+  user_id    UUID      UNIQUE REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT now()
 );
 
--- =========================
--- TABLA DE ASISTENCIAS
--- =========================
-create table if not exists asistencias (
-  id uuid primary key default uuid_generate_v4(),
-  estudiante_id uuid not null references estudiantes(id) on delete cascade,
-  fecha date not null,
-  hora time not null,
-  estado text check (estado in ('presente','ausente','retraso')) not null,
-  registrado_por uuid references auth.users(id),
-  created_at timestamp default now()
+-- ─────────────────────────────────────────
+-- clases_grabadas: videos de clase
+-- ─────────────────────────────────────────
+CREATE TABLE public.clases_grabadas (
+  id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  titulo      TEXT        NOT NULL,
+  descripcion TEXT,
+  url_video   TEXT        NOT NULL,
+  creado_en   TIMESTAMPTZ DEFAULT now()
 );
 
--- =========================
--- ÍNDICES PARA OPTIMIZACIÓN
--- =========================
-create index if not exists idx_usuarios_roles_user_id on usuarios_roles(user_id);
-create index if not exists idx_asistencias_estudiante_fecha on asistencias(estudiante_id, fecha);
-create index if not exists idx_asistencias_fecha on asistencias(fecha);
+-- ─────────────────────────────────────────
+-- configuracion_notas: parámetros del sistema de notas (clave/valor)
+-- ─────────────────────────────────────────
+CREATE TABLE public.configuracion_notas (
+  id          UUID      PRIMARY KEY DEFAULT uuid_generate_v4(),
+  clave       TEXT      NOT NULL UNIQUE,
+  valor       NUMERIC   NOT NULL CHECK (valor >= 0),
+  descripcion TEXT,
+  updated_at  TIMESTAMP DEFAULT now()
+);
 
--- =========================
--- HABILITAR RLS
--- =========================
-alter table roles enable row level security;
-alter table usuarios_roles enable row level security;
-alter table estudiantes enable row level security;
-alter table asistencias enable row level security;
+INSERT INTO public.configuracion_notas (clave, valor, descripcion) VALUES
+  ('total_clases',              10, 'Número total de clases del semestre'),
+  ('puntos_maximos_asistencia', 10, 'Puntaje máximo por asistencia'),
+  ('puntos_maximos_practicas',  20, 'Puntaje máximo por prácticas de laboratorio'),
+  ('puntos_maximos_tareas',     30, 'Puntaje máximo por presentaciones/tareas'),
+  ('puntos_maximos_actividades',10, 'Puntaje máximo por participación en actividades'),
+  ('puntos_maximos_extras',     10, 'Puntaje máximo por puntos extras');
 
--- =========================
--- POLÍTICAS RLS PARA ROLES
--- =========================
-create policy "Roles are readable by all" on roles
-  for select using (true);
 
--- =========================
--- POLÍTICAS RLS PARA USUARIOS_ROLES
--- =========================
-create policy "Users can view their own role" on usuarios_roles
-  for select using (auth.uid() = user_id);
+-- ┌─────────────────────────────────────────────────────────┐
+-- │  PASO 3 — TABLAS CON FK A ESTUDIANTES                   │
+-- └─────────────────────────────────────────────────────────┘
 
-create policy "Auxiliares can view all roles" on usuarios_roles
-  for select using (
-    exists (
-      select 1 from usuarios_roles ur
-      where ur.user_id = auth.uid() and ur.rol = 'auxiliar'
-    )
-  );
+-- ─────────────────────────────────────────
+-- asistencias
+-- ─────────────────────────────────────────
+CREATE TABLE public.asistencias (
+  id             UUID      PRIMARY KEY DEFAULT uuid_generate_v4(),
+  estudiante_id  UUID      NOT NULL REFERENCES public.estudiantes(id) ON DELETE CASCADE,
+  fecha          DATE      NOT NULL,
+  hora           TIME      NOT NULL,
+  estado         TEXT      NOT NULL CHECK (estado IN ('presente', 'ausente', 'retraso')),
+  registrado_por UUID      REFERENCES auth.users(id),
+  created_at     TIMESTAMP DEFAULT now()
+);
 
--- =========================
--- POLÍTICAS RLS PARA ESTUDIANTES
--- =========================
-create policy "Students can view themselves" on estudiantes
-  for select using (auth.uid() = user_id);
+-- ─────────────────────────────────────────
+-- practicas: ejercicios de laboratorio Python
+-- configuracion JSONB: { "verificaciones": [...], "asistencia": bool }
+-- ─────────────────────────────────────────
+CREATE TABLE public.practicas (
+  id                 UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nombre             TEXT        NOT NULL,
+  descripcion        TEXT        NOT NULL,
+  resultado_esperado TEXT        NOT NULL,
+  codigo_base        TEXT,
+  paralelo           TEXT        NOT NULL CHECK (paralelo IN ('A', 'B', 'C')),
+  fecha_limite       TIMESTAMPTZ,
+  configuracion      JSONB,
+  creado_en          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
-create policy "Auxiliares can view all students" on estudiantes
-  for select using (
-    exists (
-      select 1 from usuarios_roles ur
-      where ur.user_id = auth.uid() and ur.rol = 'auxiliar'
-    )
-  );
+-- ─────────────────────────────────────────
+-- entregas: respuestas de código de prácticas
+-- Una entrega por estudiante por práctica (UNIQUE)
+-- ─────────────────────────────────────────
+CREATE TABLE public.entregas (
+  id            UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  practica_id   UUID        NOT NULL REFERENCES public.practicas(id) ON DELETE CASCADE,
+  estudiante_id UUID        NOT NULL REFERENCES public.estudiantes(id) ON DELETE CASCADE,
+  codigo        TEXT        NOT NULL,
+  nota          INTEGER     CHECK (nota BETWEEN 0 AND 100),
+  fecha_entrega TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT uq_entrega_practica_estudiante UNIQUE (practica_id, estudiante_id)
+);
 
-create policy "Auxiliares can insert students" on estudiantes
-  for insert with check (
-    exists (
-      select 1 from usuarios_roles ur
-      where ur.user_id = auth.uid() and ur.rol = 'auxiliar'
-    )
-  );
+-- ─────────────────────────────────────────
+-- extras: puntos adicionales por mérito
+-- ─────────────────────────────────────────
+CREATE TABLE public.extras (
+  id            UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  estudiante_id UUID        REFERENCES public.estudiantes(id) ON DELETE CASCADE,
+  puntos        NUMERIC     NOT NULL CHECK (puntos > 0),
+  descripcion   TEXT,
+  creado_en     TIMESTAMPTZ DEFAULT now()
+);
 
-create policy "Auxiliares can update students" on estudiantes
-  for update using (
-    exists (
-      select 1 from usuarios_roles ur
-      where ur.user_id = auth.uid() and ur.rol = 'auxiliar'
-    )
-  );
+-- ─────────────────────────────────────────
+-- actividades: eventos de participación
+-- ─────────────────────────────────────────
+CREATE TABLE public.actividades (
+  id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nombre      TEXT        NOT NULL,
+  fecha       DATE        NOT NULL,
+  hora_inicio TIME,
+  hora_fin    TIME,
+  ponderacion NUMERIC     NOT NULL CHECK (ponderacion >= 0),
+  creado_en   TIMESTAMPTZ DEFAULT now()
+);
 
--- =========================
--- POLÍTICAS RLS PARA ASISTENCIAS
--- =========================
-create policy "Students can view their own attendance" on asistencias
-  for select using (
-    estudiante_id in (
-      select id from estudiantes where user_id = auth.uid()
-    )
-  );
+-- ─────────────────────────────────────────
+-- actividad_participantes: relación actividad ↔ estudiante
+-- Sin duplicados (UNIQUE)
+-- ─────────────────────────────────────────
+CREATE TABLE public.actividad_participantes (
+  id            UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  actividad_id  UUID        REFERENCES public.actividades(id) ON DELETE CASCADE,
+  estudiante_id UUID        REFERENCES public.estudiantes(id) ON DELETE CASCADE,
+  registrado_en TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT uq_actividad_participante UNIQUE (actividad_id, estudiante_id)
+);
 
-create policy "Auxiliares can view all attendance" on asistencias
-  for select using (
-    exists (
-      select 1 from usuarios_roles ur
-      where ur.user_id = auth.uid() and ur.rol = 'auxiliar'
-    )
-  );
+-- ─────────────────────────────────────────
+-- presentaciones_tareas: tareas con entrega de archivos
+-- ─────────────────────────────────────────
+CREATE TABLE public.presentaciones_tareas (
+  id           UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  titulo       TEXT        NOT NULL,
+  descripcion  TEXT,
+  paralelo     TEXT        NOT NULL CHECK (paralelo IN ('A', 'B', 'C')),
+  fecha_limite TIMESTAMPTZ,
+  ponderacion  NUMERIC     CHECK (ponderacion >= 0),
+  pdf_file_id  TEXT,
+  pdf_url      TEXT,
+  creado_en    TIMESTAMPTZ DEFAULT now()
+);
 
-create policy "Auxiliares can insert attendance" on asistencias
-  for insert with check (
-    exists (
-      select 1 from usuarios_roles ur
-      where ur.user_id = auth.uid() and ur.rol = 'auxiliar'
-    )
-  );
+-- ─────────────────────────────────────────
+-- presentaciones_entregas: archivos entregados por estudiantes
+-- archivos JSONB: [{ nombre, drive_file_id, drive_url, tipo, size }]
+-- Una entrega por tarea por estudiante (UNIQUE)
+-- ─────────────────────────────────────────
+CREATE TABLE public.presentaciones_entregas (
+  id              UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tarea_id        UUID        NOT NULL REFERENCES public.presentaciones_tareas(id) ON DELETE CASCADE,
+  estudiante_id   UUID        NOT NULL REFERENCES public.estudiantes(id) ON DELETE CASCADE,
+  archivos        JSONB       NOT NULL DEFAULT '[]',
+  estado          TEXT        NOT NULL DEFAULT 'revision'
+                              CHECK (estado IN ('revision', 'revisado')),
+  nota            NUMERIC     CHECK (nota BETWEEN 0 AND 100),
+  comentario      TEXT,
+  drive_folder_id TEXT,
+  entregado_en    TIMESTAMPTZ DEFAULT now(),
+  revisado_en     TIMESTAMPTZ,
+  CONSTRAINT uq_presentacion_por_tarea UNIQUE (tarea_id, estudiante_id)
+);
 
-create policy "Auxiliares can update attendance" on asistencias
-  for update using (
-    exists (
-      select 1 from usuarios_roles ur
-      where ur.user_id = auth.uid() and ur.rol = 'auxiliar'
-    )
-  );
+-- ─────────────────────────────────────────
+-- liberaciones: examen de liberación semestral
+-- Columnas planas (no JSONB para examen_contenido/examen_respuesta)
+-- Registros con ru LIKE 'CONFIG_%' = configuración interna del sistema
+-- archivos_respuesta JSONB: [{ nombre, drive_file_id, drive_url, tipo, size }]
+-- ─────────────────────────────────────────
+CREATE TABLE public.liberaciones (
+  id                   UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  estudiante_id        UUID        REFERENCES public.estudiantes(id) ON DELETE SET NULL,
+  estado               TEXT        CHECK (estado IN ('pendiente', 'confirmado', 'en_examen', 'finalizado')),
+  nota                 NUMERIC     CHECK (nota BETWEEN 0 AND 100),
+  horario_seleccionado TEXT,
+  -- Examen: PDF del enunciado (antes en examen_contenido JSONB)
+  examen_pdf_url       TEXT,
+  examen_pdf_file_id   TEXT,
+  -- Respuesta del estudiante (antes en examen_respuesta JSONB)
+  archivos_respuesta   JSONB,
+  drive_folder_id      TEXT,
+  -- Timestamps del flujo
+  confirmado_en        TIMESTAMPTZ,
+  finalizado_en        TIMESTAMPTZ,
+  creado_en            TIMESTAMPTZ DEFAULT now()
+);

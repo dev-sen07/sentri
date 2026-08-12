@@ -43,6 +43,7 @@ import {
   CheckCircle,
   RefreshCw,
 } from "lucide-react";
+import { LaboratorioTabs } from "@/components/laboratorio-tabs";
 
 interface PracticaWithEstado extends PracticaRow {
   entrega?: { nota: number; fecha_entrega: string };
@@ -530,6 +531,8 @@ export default function PracticasPage() {
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-7xl mx-auto px-4 py-8">
+        <LaboratorioTabs />
+        
         {/* Page Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">

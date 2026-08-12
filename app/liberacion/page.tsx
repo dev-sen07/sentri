@@ -27,26 +27,11 @@ import {
 } from '@/components/ui/select'
 
 /* ═══════════════════════════════════════════════════════════════
-   HELPER MAPPING FUNCTION
+   NOTA: mapRawToLiberacionRow fue eliminada.
+   La tabla 'liberaciones' ahora usa columnas planas directas
+   (examen_pdf_url, examen_pdf_file_id, archivos_respuesta,
+   drive_folder_id, finalizado_en) — ver migración Fase 3.
    ═══════════════════════════════════════════════════════════════ */
-
-function mapRawToLiberacionRow(raw: any): LiberacionRow {
-  return {
-    id: raw.id,
-    nombre: raw.nombre,
-    ru: raw.ru,
-    nota: raw.nota,
-    horario_seleccionado: raw.horario_seleccionado,
-    estado: raw.estado,
-    examen_pdf_url: raw.examen_contenido?.pdf_url ?? null,
-    examen_pdf_file_id: raw.examen_contenido?.pdf_file_id ?? null,
-    archivos_respuesta: raw.examen_respuesta?.archivos ?? null,
-    drive_folder_id: raw.examen_respuesta?.drive_folder_id ?? null,
-    confirmado_en: raw.confirmado_en,
-    finalizado_en: raw.examen_respuesta?.finalizado_en ?? null,
-    creado_en: raw.creado_en,
-  }
-}
 
 import {
   GraduationCap,
@@ -218,6 +203,7 @@ function EstudianteLiberacionView() {
 
   const refreshFromSupabase = async (ruVal: string, cacheKey: string, isFirstLoad: boolean) => {
     try {
+      // Fetch liberacion — columnas planas gracias a la migración Fase 3
       const { data, error: fetchError } = await supabase
         .from('liberaciones')
         .select('*')
@@ -231,25 +217,37 @@ function EstudianteLiberacionView() {
         return
       }
 
-      const libData = mapRawToLiberacionRow(data)
+      // Data ya viene en formato plano — no se necesita mapeo
+      const libData = data as LiberacionRow
 
-      // Inner join: buscar estudiante por RU → obtener nota actual desde vista_calificaciones
+      // Obtener nota actual desde vista_calificaciones
+      // Usamos estudiante_id de liberaciones (FK agregada en migración Fase 2)
+      // Fallback: buscar por RU si estudiante_id aún no está migrado
       let nota: number | null = null
-      const { data: estData } = await supabase
-        .from('estudiantes')
-        .select('id')
-        .eq('ru', ruVal)
-        .single()
+      const estudianteId = libData.estudiante_id
 
-      if (estData) {
+      if (estudianteId) {
+        // Camino optimizado: una sola query con el FK directo
         const { data: calData } = await supabase
           .from('vista_calificaciones')
           .select('nota_final')
-          .eq('estudiante_id', estData.id)
+          .eq('estudiante_id', estudianteId)
           .single()
-
-        if (calData) {
-          nota = calData.nota_final
+        if (calData) nota = calData.nota_final
+      } else {
+        // Fallback: buscar estudiante por RU (compatibilidad durante migración)
+        const { data: estData } = await supabase
+          .from('estudiantes')
+          .select('id')
+          .eq('ru', ruVal)
+          .single()
+        if (estData) {
+          const { data: calData } = await supabase
+            .from('vista_calificaciones')
+            .select('nota_final')
+            .eq('estudiante_id', estData.id)
+            .single()
+          if (calData) nota = calData.nota_final
         }
       }
 
@@ -296,23 +294,26 @@ function EstudianteLiberacionView() {
     if (!horario) return
 
     try {
-      // 1. Fetch current config for the chosen schedule
+      // 1. Obtener config del horario elegido
+      //    Los registros CONFIG_* guardan el PDF del examen en columnas planas
       const { data: configData } = await supabase
         .from('liberaciones')
-        .select('examen_contenido')
+        .select('examen_pdf_url, examen_pdf_file_id')
         .eq('ru', `CONFIG_${horarioId}`)
         .maybeSingle()
 
-      const examContenido = configData?.examen_contenido || null
+      const pdfUrl = configData?.examen_pdf_url ?? null
+      const pdfFileId = configData?.examen_pdf_file_id ?? null
 
-      // 2. Update student row
+      // 2. Actualizar registro del estudiante con columnas planas
       const { error: updateError } = await supabase
         .from('liberaciones')
         .update({
           horario_seleccionado: horarioId,
           estado: 'confirmado',
           confirmado_en: new Date().toISOString(),
-          examen_contenido: examContenido
+          examen_pdf_url: pdfUrl,
+          examen_pdf_file_id: pdfFileId,
         })
         .eq('id', estudiante.id)
 
@@ -323,8 +324,8 @@ function EstudianteLiberacionView() {
         horario_seleccionado: horarioId,
         estado: 'confirmado',
         confirmado_en: new Date().toISOString(),
-        examen_pdf_url: examContenido?.pdf_url || null,
-        examen_pdf_file_id: examContenido?.pdf_file_id || null,
+        examen_pdf_url: pdfUrl,
+        examen_pdf_file_id: pdfFileId,
       })
     } catch {
       setError('Error al confirmar horario. Intente nuevamente.')
@@ -1268,7 +1269,7 @@ function ExamenFinalizadoView({ estudiante }: { estudiante: LiberacionRow }) {
    ESTADO BADGE
    ═══════════════════════════════════════════════════════════════ */
 
-function EstadoBadge({ estado }: { estado: string }) {
+function EstadoBadge({ estado }: { estado: string | null }) {
   const config: Record<string, { text: string; className: string; icon: React.ReactNode }> = {
     pendiente: {
       text: 'Pendiente',
@@ -1292,7 +1293,7 @@ function EstadoBadge({ estado }: { estado: string }) {
     },
   }
 
-  const c = config[estado] || config.pendiente
+  const c = config[estado ?? 'pendiente'] || config.pendiente
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full border ${c.className}`}>
       {c.icon}
@@ -1337,9 +1338,9 @@ function AuxiliarLiberacionView() {
       .order('creado_en', { ascending: false })
 
     if (data) {
-      const studentRows = data
-        .filter((r: any) => !r.ru.startsWith('CONFIG_'))
-        .map(mapRawToLiberacionRow)
+      // Filtrar registros CONFIG_* — columnas ya vienen en formato plano
+      const studentRows = (data as LiberacionRow[])
+        .filter((r) => !r.ru.startsWith('CONFIG_'))
       setEstudiantes(studentRows)
     }
     setLoading(false)
@@ -1348,6 +1349,7 @@ function AuxiliarLiberacionView() {
   useEffect(() => { fetchEstudiantes() }, [fetchEstudiantes])
 
   // Fetch current config when dialogHorarioId or showUploadExamen changes
+  // Los registros CONFIG_* ahora guardan el PDF en columnas planas
   useEffect(() => {
     if (!showUploadExamen) return
     const fetchConfig = async () => {
@@ -1355,12 +1357,15 @@ function AuxiliarLiberacionView() {
       try {
         const { data } = await supabase
           .from('liberaciones')
-          .select('examen_contenido')
+          .select('examen_pdf_url, examen_pdf_file_id')
           .eq('ru', `CONFIG_${dialogHorarioId}`)
           .maybeSingle()
 
-        if (data?.examen_contenido) {
-          setCurrentConfig(data.examen_contenido as any)
+        if (data?.examen_pdf_url) {
+          setCurrentConfig({
+            pdf_url: data.examen_pdf_url,
+            pdf_file_id: data.examen_pdf_file_id ?? '',
+          })
         } else {
           setCurrentConfig(null)
         }
@@ -1393,10 +1398,8 @@ function AuxiliarLiberacionView() {
 
       const pdfUrl = data.files[0].drive_url
       const pdfFileId = data.files[0].drive_file_id
-      const pdfName = pdfFile.name
 
       const configRu = `CONFIG_${dialogHorarioId}`
-      const examContenido = { pdf_url: pdfUrl, pdf_file_id: pdfFileId, pdf_name: pdfName }
 
       // 1. Check if config row already exists
       const { data: existingConfig } = await supabase
@@ -1406,30 +1409,34 @@ function AuxiliarLiberacionView() {
         .maybeSingle()
 
       if (existingConfig) {
+        // Actualizar columnas planas en el registro CONFIG
         const { error: errUpdate } = await supabase
           .from('liberaciones')
           .update({
-            examen_contenido: examContenido
+            examen_pdf_url: pdfUrl,
+            examen_pdf_file_id: pdfFileId,
           })
           .eq('ru', configRu)
         if (errUpdate) throw errUpdate
       } else {
+        // Crear nuevo registro CONFIG con columnas planas
         const { error: errInsert } = await supabase
           .from('liberaciones')
           .insert({
             nombre: `Config Examen ${dialogHorarioId}`,
             ru: configRu,
-            estado: 'pendiente',
-            examen_contenido: examContenido
+            examen_pdf_url: pdfUrl,
+            examen_pdf_file_id: pdfFileId,
           })
         if (errInsert) throw errInsert
       }
 
-      // 2. Update all students with this schedule selection
+      // 2. Update all students with this schedule: asignarles el mismo PDF
       const { error: errStudents } = await supabase
         .from('liberaciones')
         .update({
-          examen_contenido: examContenido
+          examen_pdf_url: pdfUrl,
+          examen_pdf_file_id: pdfFileId,
         })
         .eq('horario_seleccionado', dialogHorarioId)
 
@@ -1463,20 +1470,22 @@ function AuxiliarLiberacionView() {
 
       const configRu = `CONFIG_${dialogHorarioId}`
 
-      // 2. Clear config row examen_contenido
+      // 2. Limpiar columnas planas del registro CONFIG
       const { error: errUpdateConfig } = await supabase
         .from('liberaciones')
         .update({
-          examen_contenido: null
+          examen_pdf_url: null,
+          examen_pdf_file_id: null,
         })
         .eq('ru', configRu)
       if (errUpdateConfig) throw errUpdateConfig
 
-      // 3. Clear students' examen_contenido
+      // 3. Limpiar columnas planas de estudiantes con ese horario
       const { error: errUpdateStudents } = await supabase
         .from('liberaciones')
         .update({
-          examen_contenido: null
+          examen_pdf_url: null,
+          examen_pdf_file_id: null,
         })
         .eq('horario_seleccionado', dialogHorarioId)
       if (errUpdateStudents) throw errUpdateStudents
@@ -2065,7 +2074,7 @@ function AuxiliarLiberacionView() {
    ESTADO BADGE (DASHBOARD - LIGHT THEME)
    ═══════════════════════════════════════════════════════════════ */
 
-function EstadoBadgeDashboard({ estado }: { estado: string }) {
+function EstadoBadgeDashboard({ estado }: { estado: string | null }) {
   const config: Record<string, { text: string; className: string; icon: React.ReactNode }> = {
     pendiente: {
       text: 'Pendiente',
@@ -2089,7 +2098,7 @@ function EstadoBadgeDashboard({ estado }: { estado: string }) {
     },
   }
 
-  const c = config[estado] || config.pendiente
+  const c = config[estado ?? 'pendiente'] || config.pendiente
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full border ${c.className}`}>
       {c.icon}

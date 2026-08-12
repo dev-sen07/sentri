@@ -165,14 +165,20 @@ export type LiberacionRow = {
   id: string
   nombre: string
   ru: string
+  paralelo: 'A' | 'B' | 'C' | null
   nota: number | null
   horario_seleccionado: string | null
-  estado: 'pendiente' | 'confirmado' | 'en_examen' | 'finalizado'
+  estado: 'pendiente' | 'confirmado' | 'en_examen' | 'finalizado' | null
+  // Columnas migradas desde examen_contenido JSONB (Fase 3 de migración)
   examen_pdf_url: string | null
   examen_pdf_file_id: string | null
+  // Columnas migradas desde examen_respuesta JSONB (Fase 3 de migración)
   archivos_respuesta: ArchivoMetadata[] | null
   drive_folder_id: string | null
-  confirmado_en: string | null
   finalizado_en: string | null
+  // Metadatos
+  confirmado_en: string | null
   creado_en: string
+  // FK hacia estudiantes (agregado en migración Fase 2)
+  estudiante_id: string | null
 }
