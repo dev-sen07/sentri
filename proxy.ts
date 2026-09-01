@@ -1,10 +1,10 @@
-﻿import { createServerClient } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // Rutas que NO requieren autenticacion
 const PUBLIC_ROUTES = ['/login']
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isPublicRoute = PUBLIC_ROUTES.some((r) => pathname.startsWith(r))
 
