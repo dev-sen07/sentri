@@ -100,7 +100,7 @@ export function AppSidebar() {
         {
           label: 'Laboratorio',
           items: [
-            { title: 'Laboratorio', url: '/practicas', icon: FlaskConical, color: 'text-cyan-500' },
+            { title: 'Laboratorio', url: '/laboratorio', icon: FlaskConical, color: 'text-cyan-500' },
             { title: 'Reporte Final', url: '/reporte-estudiantes', icon: FileText, color: 'text-rose-500' },
           ]
         },
@@ -125,7 +125,7 @@ export function AppSidebar() {
         label: 'Académico',
         items: [
           { title: 'Mis Asistencias', url: '/mis-asistencias', icon: History, color: 'text-emerald-500' },
-          { title: 'Laboratorio', url: '/practicas', icon: FlaskConical, color: 'text-cyan-500' },
+          { title: 'Laboratorio', url: '/laboratorio', icon: FlaskConical, color: 'text-cyan-500' },
           { title: 'Clases Grabadas', url: '/clases-grabadas', icon: Video, color: 'text-fuchsia-500' },
         ]
       }

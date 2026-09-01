@@ -73,7 +73,7 @@ const AUXILIAR_TABS = [
       {
         title: 'Ver Prácticas',
         description: 'Gestionar ejercicios Python y revisar entregas de código',
-        href: '/practicas',
+        href: '/laboratorio?tab=practicas',
         icon: BookOpen,
         gradient: 'from-orange-500/20 to-amber-500/10',
         border: 'border-orange-200 dark:border-orange-900',
@@ -83,7 +83,7 @@ const AUXILIAR_TABS = [
       {
         title: 'Presentaciones',
         description: 'Revisar y calificar archivos entregados por estudiantes',
-        href: '/presentar-practicas',
+        href: '/laboratorio?tab=presentar-practicas',
         icon: FileUp,
         gradient: 'from-teal-500/20 to-cyan-500/10',
         border: 'border-teal-200 dark:border-teal-900',
@@ -93,7 +93,7 @@ const AUXILIAR_TABS = [
       {
         title: 'Liberación',
         description: 'Gestionar el examen de liberación semestral',
-        href: '/liberacion',
+        href: '/laboratorio?tab=liberacion',
         icon: GraduationCap,
         gradient: 'from-violet-500/20 to-purple-500/10',
         border: 'border-violet-200 dark:border-violet-900',
@@ -181,7 +181,7 @@ const ESTUDIANTE_TABS = [
       {
         title: 'Prácticas',
         description: 'Resuelve los ejercicios de programación asignados',
-        href: '/practicas',
+        href: '/laboratorio?tab=practicas',
         icon: Code,
         gradient: 'from-indigo-500/20 to-blue-500/10',
         border: 'border-indigo-200 dark:border-indigo-900',
@@ -191,7 +191,7 @@ const ESTUDIANTE_TABS = [
       {
         title: 'Presentar Prácticas',
         description: 'Sube tus archivos de prácticas para revisión',
-        href: '/presentar-practicas',
+        href: '/laboratorio?tab=presentar-practicas',
         icon: FileUp,
         gradient: 'from-teal-500/20 to-cyan-500/10',
         border: 'border-teal-200 dark:border-teal-900',
@@ -201,7 +201,7 @@ const ESTUDIANTE_TABS = [
       {
         title: 'Liberación',
         description: 'Accede al examen de liberación semestral',
-        href: '/liberacion',
+        href: '/laboratorio?tab=liberacion',
         icon: GraduationCap,
         gradient: 'from-amber-500/20 to-orange-500/10',
         border: 'border-amber-200 dark:border-amber-900',

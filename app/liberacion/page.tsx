@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { LiberacionAdminContent } from './admin/page'
 import {
   AlertDialog,
   AlertDialogContent,
@@ -106,24 +107,27 @@ const HORARIOS = [
    MAIN PAGE COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 
-export default function LiberacionPage() {
+export function LiberacionContent() {
   const router = useRouter()
   const [isAuxiliar, setIsAuxiliar] = useState(false)
+  const [userId, setUserId] = useState<string | null>(null)
   const [checkingAuth, setCheckingAuth] = useState(true)
 
   useEffect(() => {
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        const { data: roleData } = await supabase
-          .from('usuarios_roles')
-          .select('rol')
-          .eq('user_id', session.user.id)
-          .single()
+      if (!session) { router.replace('/login'); return }
 
-        if (roleData?.rol === 'auxiliar') {
-          setIsAuxiliar(true)
-        }
+      const { data: roleData } = await supabase
+        .from('usuarios_roles')
+        .select('rol')
+        .eq('user_id', session.user.id)
+        .single()
+
+      if (roleData?.rol === 'auxiliar') {
+        setIsAuxiliar(true)
+      } else {
+        setUserId(session.user.id)
       }
       setCheckingAuth(false)
     }
@@ -142,11 +146,309 @@ export default function LiberacionPage() {
   }
 
   if (isAuxiliar) {
-    router.push('/liberacion/admin')
-    return null
+    return <LiberacionAdminContent />
+  }
+
+  if (userId) {
+    return <EstudianteAutenticadoView userId={userId} />
+  }
+
+  return null
+}
+
+export default function LiberacionPage() {
+  const router = useRouter()
+  const [checkingAuth, setCheckingAuth] = useState(true)
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        router.replace('/laboratorio?tab=liberacion')
+        return
+      }
+      setCheckingAuth(false)
+    }
+    checkAuth()
+  }, [router])
+
+  if (checkingAuth) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-zinc-950">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
+          <p className="text-white/50 animate-pulse">Cargando...</p>
+        </div>
+      </div>
+    )
   }
 
   return <EstudianteLiberacionView />
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VISTA ESTUDIANTE AUTENTICADO (CON CUENTA)
+   Carga el registro de liberación directamente por user_id
+   ═══════════════════════════════════════════════════════════════ */
+
+function EstudianteAutenticadoView({ userId }: { userId: string }) {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [estudiante, setEstudiante] = useState<LiberacionRow | null>(null)
+  const [notaActual, setNotaActual] = useState<number | null>(null)
+  const [showWarning, setShowWarning] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+
+  useEffect(() => {
+    const fetchRegistro = async () => {
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('liberaciones')
+          .select('*')
+          .eq('estudiante_id', userId)
+          .maybeSingle()
+
+        if (fetchError) throw fetchError
+
+        if (!data) {
+          setError('No tienes un registro de liberación asignado. Contacta al auxiliar.')
+          setLoading(false)
+          return
+        }
+
+        const libData = data as LiberacionRow
+
+        const { data: calData } = await supabase
+          .from('vista_calificaciones')
+          .select('nota_final')
+          .eq('estudiante_id', userId)
+          .single()
+
+        if (calData) setNotaActual(calData.nota_final)
+
+        setEstudiante(libData)
+
+        if (libData.estado === 'pendiente') {
+          setShowWarning(true)
+        }
+      } catch {
+        setError('Error de conexión. Intente nuevamente.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchRegistro()
+  }, [userId])
+
+  const updateEstudianteState = (updated: LiberacionRow) => {
+    setEstudiante(updated)
+  }
+
+  const handleConfirm = () => {
+    setConfirming(true)
+    setShowWarning(false)
+    setConfirming(false)
+  }
+
+  const handleSelectHorario = async (horarioId: string) => {
+    if (!estudiante) return
+
+    const horario = HORARIOS.find(h => h.id === horarioId)
+    if (!horario) return
+
+    try {
+      const { data: configData } = await supabase
+        .from('liberaciones')
+        .select('examen_pdf_url, examen_pdf_file_id')
+        .eq('ru', `CONFIG_${horarioId}`)
+        .maybeSingle()
+
+      const pdfUrl = configData?.examen_pdf_url ?? null
+      const pdfFileId = configData?.examen_pdf_file_id ?? null
+
+      const { error: updateError } = await supabase
+        .from('liberaciones')
+        .update({
+          horario_seleccionado: horarioId,
+          estado: 'confirmado',
+          confirmado_en: new Date().toISOString(),
+          examen_pdf_url: pdfUrl,
+          examen_pdf_file_id: pdfFileId,
+        })
+        .eq('id', estudiante.id)
+
+      if (updateError) throw updateError
+
+      updateEstudianteState({
+        ...estudiante,
+        horario_seleccionado: horarioId,
+        estado: 'confirmado',
+        confirmado_en: new Date().toISOString(),
+        examen_pdf_url: pdfUrl,
+        examen_pdf_file_id: pdfFileId,
+      })
+    } catch {
+      setError('Error al confirmar horario. Intente nuevamente.')
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <p className="text-muted-foreground animate-pulse">Cargando...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <main className="max-w-5xl mx-auto px-4 pt-8 pb-20">
+        {/* Header */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 via-orange-500 to-orange-700 p-8 text-white shadow-xl mb-8">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_oklch(0.90_0.10_60/0.25)_0%,_transparent_60%)]" />
+          <div className="relative">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-white/20 rounded-xl">
+                <GraduationCap className="w-6 h-6" />
+              </div>
+              <span className="text-white/70 text-sm font-medium uppercase tracking-widest">Examen</span>
+            </div>
+            <h1 className="text-3xl font-bold mb-2">Examen de Liberación</h1>
+            <p className="text-white/80">
+              Registra tu horario y presenta tu examen de liberación.
+            </p>
+          </div>
+        </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/30 px-4 py-3 rounded-lg mb-6">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        {!estudiante ? (
+          /* Sin registro asignado */
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+              <GraduationCap className="w-12 h-12 text-muted-foreground/40 mb-4" />
+              <p className="text-lg font-medium text-muted-foreground">Sin registro de liberación</p>
+              <p className="text-sm text-muted-foreground/70 mt-1">
+                No tienes un registro asignado. Contacta al auxiliar.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Student info card */}
+            <Card className="mb-6">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-600 font-bold text-base shrink-0">
+                      {estudiante.nombre.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-foreground truncate">{estudiante.nombre}</p>
+                      <p className="text-sm text-muted-foreground">RU: {estudiante.ru}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 sm:ml-auto">
+                    {notaActual !== null && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-violet-500/10 border border-violet-500/20 rounded-lg">
+                        <span className="text-xs text-muted-foreground">Nota semestre:</span>
+                        <span className="text-base font-bold text-violet-500">{notaActual.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <EstadoBadge estado={estudiante.estado} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Phases */}
+            {estudiante.estado === 'pendiente' && (
+              <SeleccionHorarioView
+                onSelect={handleSelectHorario}
+                onShowWarning={() => setShowWarning(true)}
+              />
+            )}
+
+            {estudiante.estado === 'confirmado' && (
+              <ExamenDisponibilidadView
+                estudiante={estudiante}
+                onUpdate={updateEstudianteState}
+                onError={setError}
+              />
+            )}
+
+            {estudiante.estado === 'en_examen' && (
+              <ExamenPresentacionView
+                estudiante={estudiante}
+                onUpdate={updateEstudianteState}
+                onError={setError}
+              />
+            )}
+
+            {estudiante.estado === 'finalizado' && (
+              <ExamenFinalizadoView estudiante={estudiante} />
+            )}
+          </>
+        )}
+
+        {/* Warning Dialog — aparece al entrar si está pendiente */}
+        <AlertDialog open={showWarning} onOpenChange={setShowWarning}>
+          <AlertDialogContent className="max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-3 text-amber-500">
+                <div className="p-2 bg-amber-500/15 rounded-xl">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                Advertencia Importante
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-base mt-4 leading-relaxed">
+                Al registrarte en el examen de liberación debes saber que:
+                <div className="mt-4 space-y-3">
+                  {notaActual !== null && (
+                    <div className="flex items-center justify-between p-3 bg-muted rounded-xl border">
+                      <span className="text-sm text-muted-foreground">Nota actual del semestre:</span>
+                      <span className="text-xl font-bold">{notaActual.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-xl space-y-2">
+                    <p className="text-destructive font-semibold flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      Esta nota será reemplazada por 0 (cero)
+                    </p>
+                    <p className="text-destructive/80 text-sm">
+                      Solo se tomará en cuenta la nota obtenida en el examen de liberación.
+                    </p>
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="mt-4">
+              <AlertDialogCancel>
+                Cancelar
+              </AlertDialogCancel>
+              <Button
+                onClick={handleConfirm}
+                disabled={confirming}
+                className="bg-amber-500 hover:bg-amber-600 text-white font-semibold"
+              >
+                {confirming ? 'Procesando...' : 'Entendido, continuar'}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </main>
+    </div>
+  )
 }
 
 /* ═══════════════════════════════════════════════════════════════

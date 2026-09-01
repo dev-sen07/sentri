@@ -100,9 +100,9 @@ export function Header({ userRole, userName }: HeaderProps) {
                 Mis Asistencias
               </Link>
               <Link
-                href="/practicas"
+                href="/laboratorio"
                 className={`text-sm transition ${
-                  pathname?.startsWith('/practicas')
+                  pathname?.startsWith('/laboratorio') || pathname?.startsWith('/practicas') || pathname?.startsWith('/presentar-practicas') || pathname?.startsWith('/liberacion')
                     ? 'font-semibold text-foreground'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}

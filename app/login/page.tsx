@@ -116,26 +116,6 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-white/10" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-black/40 backdrop-blur-xl px-3 text-white/40 tracking-widest">o</span>
-            </div>
-          </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full h-11 text-base font-semibold bg-gradient-to-r from-amber-500/20 to-orange-500/20 hover:from-amber-500/30 hover:to-orange-500/30 border-amber-500/30 hover:border-amber-500/50 text-amber-200 hover:text-amber-100 transition-all shadow-lg shadow-amber-500/10"
-            onClick={() => router.push('/liberacion')}
-          >
-            <div className="flex items-center gap-2">
-              <GraduationCap className="w-5 h-5" />
-              Examen de Liberación
-            </div>
-          </Button>
         </CardContent>
       </Card>
     </main>

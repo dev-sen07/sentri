@@ -43,8 +43,6 @@ import {
   CheckCircle,
   RefreshCw,
 } from "lucide-react";
-import { LaboratorioTabs } from "@/components/laboratorio-tabs";
-
 interface PracticaWithEstado extends PracticaRow {
   entrega?: { nota: number; fecha_entrega: string };
 }
@@ -60,7 +58,7 @@ interface EntregaRevision {
   practicas?: { nombre: string } | null;
 }
 
-export default function PracticasPage() {
+export function PracticasContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -532,8 +530,6 @@ export default function PracticasPage() {
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-7xl mx-auto px-4 py-8">
-        <LaboratorioTabs />
-        
         {/* Page Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
@@ -974,6 +970,18 @@ export default function PracticasPage() {
           </AlertDialogContent>
         </AlertDialog>
       </main>
+    </div>
+  );
+}
+
+export default function PracticasPage() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/laboratorio?tab=practicas");
+  }, [router]);
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
     </div>
   );
 }

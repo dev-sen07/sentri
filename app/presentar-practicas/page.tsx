@@ -41,15 +41,13 @@ import {
   Star,
   Eye,
 } from 'lucide-react'
-import { LaboratorioTabs } from '@/components/laboratorio-tabs'
-
 type UserRole = 'estudiante' | 'auxiliar' | 'delegado'
 
 type EntregaConEstudiante = PresentacionEntregaRow & {
   estudiantes?: EstudianteRow
 }
 
-export default function PresentarPracticasPage() {
+export function PresentarPracticasContent() {
   const router = useRouter()
   const [userRole, setUserRole] = useState<UserRole | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
@@ -178,7 +176,6 @@ function EstudianteView({
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-5xl mx-auto px-4 pt-8 pb-20">
-        <LaboratorioTabs />
         {/* Header */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-500 via-cyan-600 to-blue-700 p-8 text-white shadow-xl mb-8">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_oklch(0.90_0.10_180/0.25)_0%,_transparent_60%)]" />
@@ -701,7 +698,6 @@ function AuxiliarView() {
   return (
     <div className="min-h-screen bg-background">
       <main className="max-w-6xl mx-auto px-4 pt-8 pb-20">
-        <LaboratorioTabs />
         {/* Header */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-500 via-cyan-600 to-blue-700 p-8 text-white shadow-xl mb-8">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_oklch(0.90_0.10_180/0.25)_0%,_transparent_60%)]" />
@@ -1241,5 +1237,17 @@ function StatusBadge({ estado, nota }: { estado: string; nota?: number | null })
       <AlertCircle className="w-3.5 h-3.5" />
       Pendiente
     </span>
+  )
+}
+
+export default function PresentarPracticasPage() {
+  const router = useRouter()
+  useEffect(() => {
+    router.replace('/laboratorio?tab=presentar-practicas')
+  }, [router])
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+    </div>
   )
 }

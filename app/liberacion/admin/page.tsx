@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+
 import { supabase, LiberacionRow, ArchivoMetadata } from '@/lib/supabase'
 import { cacheGet, cacheSet } from '@/lib/cache'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -55,7 +56,6 @@ import {
   AlertCircle,
   Plus,
 } from 'lucide-react'
-import { LaboratorioTabs } from '@/components/laboratorio-tabs'
 
 /* ═══════════════════════════════════════════════════════════════
    HORARIOS DISPONIBLES
@@ -104,7 +104,7 @@ const HORARIOS = [
   },
 ]
 
-export default function LiberacionAdminPage() {
+export function LiberacionAdminContent() {
   const [estudiantes, setEstudiantes] = useState<LiberacionRow[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedEstudiante, setSelectedEstudiante] = useState<LiberacionRow | null>(null)
@@ -477,7 +477,6 @@ export default function LiberacionAdminPage() {
   return (
     <div className="h-screen bg-background overflow-y-auto">
       <main className="max-w-6xl mx-auto px-4 pt-6 sm:pt-8 pb-32">
-        <LaboratorioTabs />
         {/* Header */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-500 via-orange-600 to-red-700 p-6 sm:p-8 text-white shadow-xl mb-8">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_oklch(0.90_0.10_60/0.25)_0%,_transparent_60%)]" />
@@ -905,5 +904,17 @@ function EstadoBadgeDashboard({ estado }: { estado: string | null }) {
       {c.icon}
       {c.text}
     </span>
+  )
+}
+
+export default function LiberacionAdminPage() {
+  const router = useRouter()
+  useEffect(() => {
+    router.replace('/laboratorio?tab=liberacion')
+  }, [router])
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+    </div>
   )
 }
