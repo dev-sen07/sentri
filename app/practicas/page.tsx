@@ -26,7 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Tabs: using custom underline style (see marcar-asistencia pattern)
 import {
   Dialog,
   DialogContent,
@@ -87,6 +87,7 @@ export default function PracticasPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
+  const [auxTab, setAuxTab] = useState<'ver' | 'revisar'>('ver');
 
   // Cache keys (per paralelo, resolved after first fetch)
   const [estudianteParalelo, setEstudianteParalelo] = useState<string>("");
@@ -550,30 +551,38 @@ export default function PracticasPage() {
 
         {isUserAuxiliar ? (
           <div>
-            <Tabs defaultValue="ver" className="w-full flex flex-col">
-              <TabsList className="mb-6 h-11 bg-muted/60 p-1 rounded-xl">
-                <TabsTrigger
-                  value="ver"
-                  className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                >
-                  <BookOpen className="w-4 h-4" /> Ver Prácticas
-                </TabsTrigger>
-                <TabsTrigger
-                  value="revisar"
-                  className="rounded-lg gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
-                >
-                  <ClipboardCheck className="w-4 h-4" /> Revisar Entregas
-                  {entregasAll.filter((e) => e.nota === null).length > 0 && (
-                    <span className="ml-1 bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                      {entregasAll.filter((e) => e.nota === null).length}
-                    </span>
-                  )}
-                </TabsTrigger>
-              </TabsList>
+            {/* Tabs */}
+            <div className="flex gap-0 border-b border-border mb-6 overflow-x-auto">
+              <button
+                onClick={() => setAuxTab('ver')}
+                className={`px-4 sm:px-5 py-2.5 font-medium text-sm transition-colors flex items-center gap-2 border-b-2 -mb-px shrink-0 ${
+                  auxTab === 'ver' ? 'text-primary border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                <span className="hidden sm:inline">Ver Prácticas</span>
+                <span className="sm:hidden">Prácticas</span>
+              </button>
+              <button
+                onClick={() => setAuxTab('revisar')}
+                className={`px-4 sm:px-5 py-2.5 font-medium text-sm transition-colors flex items-center gap-2 border-b-2 -mb-px shrink-0 ${
+                  auxTab === 'revisar' ? 'text-primary border-primary' : 'text-muted-foreground border-transparent hover:text-foreground'
+                }`}
+              >
+                <ClipboardCheck className="w-4 h-4" />
+                <span className="hidden sm:inline">Revisar Entregas</span>
+                <span className="sm:hidden">Entregas</span>
+                {entregasAll.filter((e) => e.nota === null).length > 0 && (
+                  <span className="ml-1 bg-orange-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {entregasAll.filter((e) => e.nota === null).length}
+                  </span>
+                )}
+              </button>
+            </div>
 
-              <TabsContent value="ver">{renderPracticasGrid()}</TabsContent>
+            {auxTab === 'ver' && renderPracticasGrid()}
 
-              <TabsContent value="revisar">
+            {auxTab === 'revisar' && (
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -693,8 +702,7 @@ export default function PracticasPage() {
                     )}
                   </CardContent>
                 </Card>
-              </TabsContent>
-            </Tabs>
+            )}
           </div>
         ) : (
           renderPracticasGrid()

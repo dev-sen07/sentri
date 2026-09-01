@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+// Tabs: using custom underline style (see marcar-asistencia pattern)
 import Link from 'next/link'
 import {
   Users, CheckSquare, History, Code, User, LayoutDashboard,
@@ -259,6 +259,7 @@ export default function DashboardPage() {
   const [userRole, setUserRole] = useState<'estudiante' | 'auxiliar' | 'delegado' | null>(null)
   const [userName, setUserName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<string>('')
 
   useEffect(() => {
     const checkUser = async () => {
@@ -351,33 +352,35 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-lg font-semibold mb-4 text-muted-foreground">Acceso Rápido</h2>
 
-            <Tabs defaultValue={tabs[0].id}>
-              {/* Tab triggers */}
-              <TabsList className="mb-6 h-auto gap-1 flex-wrap bg-muted/60 p-1 rounded-xl">
-                {tabs.map((tab) => (
-                  <TabsTrigger
-                    key={tab.id}
-                    value={tab.id}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"
-                  >
-                    <tab.icon className="w-4 h-4" />
-                    {tab.label}
-                    <span className="ml-1 text-xs opacity-50">({tab.cards.length})</span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
-              {/* Tab contents */}
+            {/* Tab triggers */}
+            <div className="flex gap-0 border-b border-border mb-6 overflow-x-auto">
               {tabs.map((tab) => (
-                <TabsContent key={tab.id} value={tab.id} className="mt-0">
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {tab.cards.map((card) => (
-                      <NavCard key={card.href} card={card} />
-                    ))}
-                  </div>
-                </TabsContent>
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-4 sm:px-5 py-2.5 font-medium text-sm transition-colors flex items-center gap-2 border-b-2 -mb-px shrink-0 ${
+                    (activeTab || tabs[0].id) === tab.id
+                      ? 'text-primary border-primary'
+                      : 'text-muted-foreground border-transparent hover:text-foreground'
+                  }`}
+                >
+                  <tab.icon className="w-4 h-4" />
+                  {tab.label}
+                  <span className="ml-1 text-xs opacity-50">({tab.cards.length})</span>
+                </button>
               ))}
-            </Tabs>
+            </div>
+
+            {/* Tab contents */}
+            {tabs.map((tab) => (
+              (activeTab || tabs[0].id) === tab.id && (
+                <div key={tab.id} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {tab.cards.map((card) => (
+                    <NavCard key={card.href} card={card} />
+                  ))}
+                </div>
+              )
+            ))}
           </div>
 
         </div>
