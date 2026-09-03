@@ -320,14 +320,14 @@ export default function EstudiantesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
         <p className="text-muted-foreground">Cargando...</p>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid gap-6">
           <div className="flex justify-between items-start sm:items-center flex-col sm:flex-row gap-4">

@@ -94,7 +94,7 @@ export function PresentarPracticasContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           <p className="text-muted-foreground animate-pulse">Cargando...</p>
@@ -174,7 +174,7 @@ function EstudianteView({
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <main className="max-w-5xl mx-auto px-4 pt-8 pb-20">
         {/* Header */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-500 via-cyan-600 to-blue-700 p-8 text-white shadow-xl mb-8">
@@ -384,7 +384,7 @@ function EntregaDetailView({
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <main className="max-w-3xl mx-auto px-4 pt-8 pb-20">
         <Button variant="ghost" onClick={onBack} className="mb-6 text-muted-foreground hover:text-foreground">
           <ChevronLeft className="w-4 h-4 mr-1" /> Volver a tareas
@@ -696,7 +696,7 @@ function AuxiliarView() {
     : tareas.filter((t) => t.paralelo === filterParalelo)
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <main className="max-w-6xl mx-auto px-4 pt-8 pb-20">
         {/* Header */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-500 via-cyan-600 to-blue-700 p-8 text-white shadow-xl mb-8">
@@ -1025,7 +1025,7 @@ function AuxiliarEntregasView({
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <main className="max-w-5xl mx-auto px-4 pt-8 pb-20">
         <Button variant="ghost" onClick={onBack} className="mb-6 text-muted-foreground hover:text-foreground">
           <ChevronLeft className="w-4 h-4 mr-1" /> Volver a tareas
@@ -1246,7 +1246,7 @@ export default function PresentarPracticasPage() {
     router.replace('/laboratorio?tab=presentar-practicas')
   }, [router])
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="flex-1 flex items-center justify-center min-h-[60vh]">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
     </div>
   )

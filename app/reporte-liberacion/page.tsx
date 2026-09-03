@@ -136,7 +136,7 @@ export default function ReporteLiberacionPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
           <p className="text-muted-foreground animate-pulse">Cargando reporte...</p>
@@ -154,7 +154,7 @@ export default function ReporteLiberacionPage() {
     : '—'
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <main className="max-w-7xl mx-auto px-4 pt-8 pb-20">
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">

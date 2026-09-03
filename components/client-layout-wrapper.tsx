@@ -11,7 +11,7 @@ export function ClientLayoutWrapper({ children }: { children: React.ReactNode })
   const isAuthPage = pathname === '/login' || pathname === '/register'
   
   if (isAuthPage) {
-    return <main className="flex-1 w-full h-screen relative">{children}</main>
+    return <>{children}</>
   }
 
   // Mapear rutas a nombres legibles para el breadcrumb
@@ -34,24 +34,24 @@ export function ClientLayoutWrapper({ children }: { children: React.ReactNode })
     <div className="flex h-screen w-full bg-zinc-50 dark:bg-zinc-950">
       <AppSidebar />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        {/* Header más moderno y minimalista */}
-        <header className="flex h-16 shrink-0 items-center justify-between border-b bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl px-4 sm:px-6 sticky top-0 z-10">
-          <div className="flex items-center gap-4">
-            <SidebarTrigger className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" />
-            <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 hidden sm:block" />
-            <h2 className="text-sm font-semibold tracking-tight">
+        {/* Header moderno y minimalista */}
+        <header className="flex h-14 sm:h-16 shrink-0 items-center justify-between border-b bg-white/50 dark:bg-zinc-900/50 backdrop-blur-xl px-3 sm:px-4 lg:px-6 sticky top-0 z-10">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <SidebarTrigger className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 shrink-0" />
+            <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800 hidden sm:block shrink-0" />
+            <h2 className="text-xs sm:text-sm font-semibold tracking-tight truncate">
               {getPageTitle(pathname)}
             </h2>
           </div>
         </header>
         
         {/* Contenedor principal con scroll */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="min-h-full flex flex-col">
             {children}
             
-            {/* Footer sutil y moderno al final del contenido */}
-            <footer className="mt-auto py-6 px-4 shrink-0 text-center text-xs text-zinc-400 dark:text-zinc-600">
+            {/* Footer */}
+            <footer className="mt-auto py-4 sm:py-6 px-3 sm:px-4 shrink-0 text-center text-xs text-zinc-400 dark:text-zinc-600">
               <p>© {new Date().getFullYear()} Sentri. Todos los derechos reservados.</p>
             </footer>
           </div>

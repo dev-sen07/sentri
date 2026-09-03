@@ -210,7 +210,7 @@ export default function MiPerfilPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           <p className="text-muted-foreground animate-pulse">
@@ -223,7 +223,7 @@ export default function MiPerfilPage() {
 
   if (!estudiante) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
         <p className="text-muted-foreground text-lg">
           No se encontraron datos del estudiante
         </p>
@@ -264,7 +264,7 @@ export default function MiPerfilPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <main className="max-w-4xl mx-auto px-4 py-8 pb-16">
         {/* Banner gradient */}
         <div className="relative w-full h-48 sm:h-64 rounded-2xl mb-16 sm:mb-20 overflow-visible bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 shadow-xl">

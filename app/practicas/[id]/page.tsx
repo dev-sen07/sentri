@@ -324,7 +324,7 @@ export default function ResolverPracticaPage({ params }: { params: Promise<{ id:
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           <p className="text-muted-foreground animate-pulse">Cargando práctica...</p>
@@ -338,7 +338,7 @@ export default function ResolverPracticaPage({ params }: { params: Promise<{ id:
   const esModoLectura = !!entrega
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="mb-6 flex space-x-4 items-center">
           <Button variant="outline" onClick={() => router.push('/practicas')}>

@@ -12,7 +12,7 @@ const VALID_TABS: LabTab[] = ['practicas', 'presentar-practicas', 'liberacion']
 
 function Spinner() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="flex-1 flex items-center justify-center min-h-[60vh]">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
     </div>
   )
@@ -46,7 +46,7 @@ function LaboratorioInner() {
   if (checkingAuth) return <Spinner />
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="max-w-7xl mx-auto px-4 pt-8">
         <LaboratorioTabs active={activeTab} onChange={handleTabChange} />
       </div>

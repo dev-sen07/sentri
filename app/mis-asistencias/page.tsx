@@ -93,7 +93,7 @@ export default function MisAsistenciasPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
         <p className="text-muted-foreground">Cargando...</p>
       </div>
     )
@@ -113,7 +113,7 @@ export default function MisAsistenciasPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid gap-6">

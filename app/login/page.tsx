@@ -31,7 +31,7 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="h-screen flex flex-col sm:justify-center items-center bg-zinc-950 p-4 sm:p-8 overflow-y-auto relative pb-20">
+    <main className="h-screen w-full flex flex-col justify-center items-center bg-zinc-950 p-4 sm:p-8 overflow-y-auto relative">
       {/* Background decorations */}
       <div className="absolute top-0 left-0 w-full h-125 bg-gradient-to-b from-indigo-500/20 via-violet-500/10 to-transparent pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-125 h-[500px] bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />

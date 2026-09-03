@@ -230,18 +230,28 @@ function NavCard({ card }: { card: CardDef }) {
   return (
     <Link href={card.href}>
       <Card
-        className={`group h-full transition-all duration-200 hover:shadow-lg hover:-translate-y-1 cursor-pointer bg-gradient-to-br ${card.gradient} ${card.border} border`}
+        className={`group transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 sm:hover:-translate-y-1 cursor-pointer bg-gradient-to-br ${card.gradient} ${card.border} border`}
       >
-        <CardHeader className="pb-3">
+        {/* Mobile: horizontal layout / Desktop: vertical card */}
+        <div className="flex sm:flex-col items-center sm:items-start gap-3 sm:gap-0 p-3 sm:p-0">
           <div
-            className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center mb-3 transition-transform duration-200 group-hover:scale-110`}
+            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl ${card.iconBg} flex items-center justify-center shrink-0 sm:mt-4 sm:ml-4 sm:mb-3 transition-transform duration-200 group-hover:scale-110`}
           >
-            <card.icon className={`w-6 h-6 ${card.iconColor}`} />
+            <card.icon className={`w-5 h-5 sm:w-6 sm:h-6 ${card.iconColor}`} />
           </div>
-          <CardTitle className="text-base">{card.title}</CardTitle>
-          <CardDescription className="text-sm">{card.description}</CardDescription>
-        </CardHeader>
-        <CardContent className="pt-0">
+          <div className="flex-1 min-w-0 sm:hidden">
+            <p className="text-sm font-semibold leading-tight">{card.title}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{card.description}</p>
+          </div>
+          <div className="shrink-0 sm:hidden">
+            <span className="text-xs text-muted-foreground">→</span>
+          </div>
+          <CardHeader className="hidden sm:block pb-2 pt-0 px-4">
+            <CardTitle className="text-base">{card.title}</CardTitle>
+            <CardDescription className="text-sm">{card.description}</CardDescription>
+          </CardHeader>
+        </div>
+        <CardContent className="hidden sm:block pt-0 px-4 pb-4">
           <Button variant="secondary" className="w-full font-medium text-sm" size="sm">
             Ir ahora →
           </Button>
@@ -305,7 +315,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
           <p className="text-muted-foreground animate-pulse">Cargando...</p>
@@ -317,30 +327,30 @@ export default function DashboardPage() {
   const tabs = userRole === 'auxiliar' ? AUXILIAR_TABS : ESTUDIANTE_TABS
 
   return (
-    <div className="min-h-screen bg-background">
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid gap-8">
+    <div className="bg-background">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
+        <div className="grid gap-4 sm:gap-6 lg:gap-8">
 
           {/* Hero / Welcome Banner */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-violet-600 to-indigo-700 p-8 text-white shadow-xl">
+          <div className="relative overflow-hidden rounded-xl sm:rounded-2xl bg-gradient-to-br from-primary via-violet-600 to-indigo-700 p-5 sm:p-7 lg:p-8 text-white shadow-xl">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_oklch(0.90_0.10_310/0.25)_0%,_transparent_60%)]" />
             <div className="relative">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="p-2 bg-white/20 rounded-xl">
-                  <LayoutDashboard className="w-6 h-6" />
+              <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                <div className="p-1.5 sm:p-2 bg-white/20 rounded-lg sm:rounded-xl">
+                  <LayoutDashboard className="w-4 h-4 sm:w-6 sm:h-6" />
                 </div>
-                <span className="text-white/70 text-sm font-medium uppercase tracking-widest">Dashboard</span>
+                <span className="text-white/70 text-xs sm:text-sm font-medium uppercase tracking-widest">Dashboard</span>
               </div>
-              <h1 className="text-4xl font-bold mb-2">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mb-1.5 sm:mb-2 leading-tight">
                 ¡Hola, <span className="text-yellow-300">{userName}</span>! 👋
               </h1>
-              <p className="text-white/80 text-lg">
+              <p className="text-white/80 text-sm sm:text-base lg:text-lg leading-snug">
                 {userRole === 'auxiliar'
                   ? 'Gestiona estudiantes, asistencias y prácticas desde aquí.'
                   : 'Consulta tus registros y resuelve las prácticas asignadas.'}
               </p>
-              <div className="mt-4 inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full text-sm font-medium border border-white/30">
-                <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              <div className="mt-3 sm:mt-4 inline-flex items-center gap-2 bg-white/20 backdrop-blur-sm px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium border border-white/30">
+                <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0" />
                 {userRole === 'auxiliar'
                   ? 'Auxiliar de Laboratorio'
                   : userRole === 'delegado' ? 'Delegado' : 'Estudiante'}
@@ -350,23 +360,23 @@ export default function DashboardPage() {
 
           {/* Tabbed Navigation */}
           <div>
-            <h2 className="text-lg font-semibold mb-4 text-muted-foreground">Acceso Rápido</h2>
+            <h2 className="text-sm sm:text-base lg:text-lg font-semibold mb-3 sm:mb-4 text-muted-foreground">Acceso Rápido</h2>
 
             {/* Tab triggers */}
-            <div className="flex gap-0 border-b border-border mb-6 overflow-x-auto">
+            <div className="flex gap-0 border-b border-border mb-4 sm:mb-6 overflow-x-auto scrollbar-none -mx-3 sm:mx-0 px-3 sm:px-0">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`px-4 sm:px-5 py-2.5 font-medium text-sm transition-colors flex items-center gap-2 border-b-2 -mb-px shrink-0 ${
+                  className={`px-3 sm:px-4 lg:px-5 py-2 sm:py-2.5 font-medium text-xs sm:text-sm transition-colors flex items-center gap-1.5 sm:gap-2 border-b-2 -mb-px shrink-0 ${
                     (activeTab || tabs[0].id) === tab.id
                       ? 'text-primary border-primary'
                       : 'text-muted-foreground border-transparent hover:text-foreground'
                   }`}
                 >
-                  <tab.icon className="w-4 h-4" />
+                  <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   {tab.label}
-                  <span className="ml-1 text-xs opacity-50">({tab.cards.length})</span>
+                  <span className="ml-0.5 sm:ml-1 text-[10px] sm:text-xs opacity-50">({tab.cards.length})</span>
                 </button>
               ))}
             </div>
@@ -374,7 +384,7 @@ export default function DashboardPage() {
             {/* Tab contents */}
             {tabs.map((tab) => (
               (activeTab || tabs[0].id) === tab.id && (
-                <div key={tab.id} className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div key={tab.id} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
                   {tab.cards.map((card) => (
                     <NavCard key={card.href} card={card} />
                   ))}

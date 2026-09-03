@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Download, FileText, Table as TableIcon } from 'lucide-react'
+import { FileText, Table as TableIcon } from 'lucide-react'
 
 type EstudianteReporte = EstudianteRow & {
   notaAsistencia: number
@@ -44,6 +44,10 @@ export default function ReporteEstudiantesPage() {
   const [estudiantes, setEstudiantes] = useState<EstudianteReporte[]>([])
   const [loading, setLoading] = useState(true)
   const [filterParalelo, setFilterParalelo] = useState<string>('all')
+
+  // ─── Pagination ──────────────────────────────────────────────────────────────
+  const [currentPage, setCurrentPage] = useState(1)
+  const [rowsPerPage, setRowsPerPage] = useState(10)
 
   useEffect(() => {
     const fetchReporte = async () => {
@@ -111,6 +115,16 @@ export default function ReporteEstudiantesPage() {
     ? estudiantes 
     : estudiantes.filter(e => e.paralelo === filterParalelo)
 
+  // Reset to page 1 when filter or rows-per-page changes
+  useEffect(() => { setCurrentPage(1) }, [filterParalelo, rowsPerPage])
+
+  // Pagination math
+  const totalRows = filteredEstudiantes.length
+  const totalPages = Math.max(1, Math.ceil(totalRows / rowsPerPage))
+  const startIndex = (currentPage - 1) * rowsPerPage
+  const endIndex = Math.min(startIndex + rowsPerPage, totalRows)
+  const paginatedEstudiantes = filteredEstudiantes.slice(startIndex, endIndex)
+
   const handleExportExcel = () => {
     const dataToExport = filteredEstudiantes.map((est, i) => ({
       'Nro': i + 1,
@@ -168,25 +182,25 @@ export default function ReporteEstudiantesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <main className="max-w-7xl mx-auto px-4 pt-8 pb-20">
+    <div className="bg-background">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 pt-6 sm:pt-8 pb-20">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Reporte Final</h1>
-            <p className="text-muted-foreground mt-2">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Reporte Final</h1>
+            <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">
               Visualiza y exporta las notas consolidadas de los estudiantes.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <Select value={filterParalelo} onValueChange={setFilterParalelo}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-[150px] sm:w-[160px]">
                 <SelectValue placeholder="Filtrar Paralelo" />
               </SelectTrigger>
               <SelectContent>
@@ -208,44 +222,148 @@ export default function ReporteEstudiantesPage() {
         </div>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Listado de Estudiantes</CardTitle>
-            <CardDescription>Mostrando {filteredEstudiantes.length} estudiantes del paralelo seleccionado.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {filteredEstudiantes.length === 0 ? (
-              <p className="text-center py-8 text-muted-foreground">No hay estudiantes para mostrar.</p>
-            ) : (
-              <div className="overflow-x-auto rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-12 text-center">Nro</TableHead>
-                      <TableHead>Apellidos y Nombres</TableHead>
-                      <TableHead>CI</TableHead>
-                      <TableHead>RU</TableHead>
-                      <TableHead className="text-center">Paralelo</TableHead>
-                      <TableHead className="text-right font-bold text-primary">Nota Final</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredEstudiantes.map((est, index) => (
-                      <TableRow key={est.id}>
-                        <TableCell className="text-center text-muted-foreground">{index + 1}</TableCell>
-                        <TableCell className="font-medium">{est.apellido} {est.nombre}</TableCell>
-                        <TableCell>{est.ci}</TableCell>
-                        <TableCell>{est.ru}</TableCell>
-                        <TableCell className="text-center font-semibold">{est.paralelo}</TableCell>
-                        <TableCell className="text-right">
-                          <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-primary/10 text-primary font-bold">
-                            {est.notaFinal.toFixed(2)}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <CardTitle className="text-base sm:text-lg">Listado de Estudiantes</CardTitle>
+                <CardDescription className="text-xs sm:text-sm mt-0.5">
+                  {totalRows === 0
+                    ? 'No hay estudiantes para mostrar.'
+                    : `Mostrando ${startIndex + 1}–${endIndex} de ${totalRows} estudiantes`}
+                </CardDescription>
               </div>
+              {/* Rows per page selector */}
+              {totalRows > 0 && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground shrink-0">
+                  <span className="text-xs hidden sm:inline">Filas por página:</span>
+                  <Select value={String(rowsPerPage)} onValueChange={v => setRowsPerPage(Number(v))}>
+                    <SelectTrigger className="h-8 w-[70px] text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="px-3 sm:px-6">
+            {filteredEstudiantes.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground text-sm">No hay estudiantes para mostrar.</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="w-12 text-center">#</TableHead>
+                        <TableHead>Apellidos y Nombres</TableHead>
+                        <TableHead className="hidden sm:table-cell">CI</TableHead>
+                        <TableHead className="hidden md:table-cell">RU</TableHead>
+                        <TableHead className="text-center">Paralelo</TableHead>
+                        <TableHead className="text-right font-bold text-primary">Nota Final</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedEstudiantes.map((est, index) => (
+                        <TableRow key={est.id}>
+                          <TableCell className="text-center text-muted-foreground text-xs">{startIndex + index + 1}</TableCell>
+                          <TableCell className="font-medium text-sm">{est.apellido} {est.nombre}</TableCell>
+                          <TableCell className="hidden sm:table-cell text-sm">{est.ci}</TableCell>
+                          <TableCell className="hidden md:table-cell text-sm">{est.ru}</TableCell>
+                          <TableCell className="text-center font-semibold text-sm">{est.paralelo}</TableCell>
+                          <TableCell className="text-right">
+                            <span className="inline-flex items-center justify-center px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-primary/10 text-primary font-bold text-sm">
+                              {est.notaFinal.toFixed(2)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* ─── Pagination Controls ─── */}
+                {totalPages > 1 && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-border">
+                    <p className="text-xs text-muted-foreground order-2 sm:order-1">
+                      Página <span className="font-semibold">{currentPage}</span> de <span className="font-semibold">{totalPages}</span>
+                    </p>
+                    <div className="flex items-center gap-1 order-1 sm:order-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2.5 text-xs"
+                        onClick={() => setCurrentPage(1)}
+                        disabled={currentPage === 1}
+                      >
+                        «
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        ‹ Anterior
+                      </Button>
+
+                      {/* Page number pills */}
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter(page =>
+                            page === 1 ||
+                            page === totalPages ||
+                            Math.abs(page - currentPage) <= 1
+                          )
+                          .reduce<(number | 'ellipsis')[]>((acc, page, idx, arr) => {
+                            if (idx > 0 && page - (arr[idx - 1] as number) > 1) acc.push('ellipsis')
+                            acc.push(page)
+                            return acc
+                          }, [])
+                          .map((item, idx) =>
+                            item === 'ellipsis' ? (
+                              <span key={`ellipsis-${idx}`} className="px-1 text-muted-foreground text-xs">…</span>
+                            ) : (
+                              <Button
+                                key={item}
+                                variant={currentPage === item ? 'default' : 'outline'}
+                                size="sm"
+                                className="h-8 w-8 p-0 text-xs"
+                                onClick={() => setCurrentPage(item as number)}
+                              >
+                                {item}
+                              </Button>
+                            )
+                          )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Siguiente ›
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2.5 text-xs"
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                      >
+                        »
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
