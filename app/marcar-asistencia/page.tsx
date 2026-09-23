@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, EstudianteRow } from '@/lib/supabase'
 import { cacheGet, cacheSet } from '@/lib/cache'
+import { hoyISO, horaActual, formatFechaMedia } from '@/lib/fecha'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -91,11 +92,10 @@ export default function MarcarAsistenciaPage() {
 
         if (!roleData || roleData.rol !== 'auxiliar') { router.push('/dashboard'); return }
 
-        const today = new Date().toISOString().split('T')[0]
-        const now = new Date()
+        const today = hoyISO()
         setFecha(today)
         setFechaFiltro(today)
-        setHora(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`)
+        setHora(horaActual())
 
         // Load student index (from cache if available)
         await loadStudentIndex()
@@ -162,7 +162,7 @@ export default function MarcarAsistenciaPage() {
         }))
         setAsistenciasHoy(mapped)
         // Cache today's attendance for 1 minute; past dates for 10 min
-        const isToday = new Date().toISOString().split('T')[0] === fechaTarget
+        const isToday = hoyISO() === fechaTarget
         cacheSet(histKey, mapped, isToday ? HISTORY_TTL : STUDENTS_TTL)
       }
     } catch (err) {
@@ -422,7 +422,7 @@ export default function MarcarAsistenciaPage() {
                     <div>
                       <CardTitle className="text-base">Registros de Hoy</CardTitle>
                       <CardDescription className="text-xs">
-                        {fecha ? new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }) : ''}
+                        {fecha ? formatFechaMedia(fecha) : ''}
                       </CardDescription>
                     </div>
                     <Button variant="outline" size="sm" className="self-start sm:self-auto" onClick={() => fetchHistory(fecha, true)}>

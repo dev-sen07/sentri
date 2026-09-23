@@ -4,6 +4,8 @@ import { useEffect, useState, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, PracticaRow, EntregaRow, Verificacion } from '@/lib/supabase'
 import { cacheClear } from '@/lib/cache'
+import { hoyISO, horaActual } from '@/lib/fecha'
+import { mensajeDeError } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -79,7 +81,10 @@ export default function ResolverPracticaPage({ params }: { params: Promise<{ id:
   const [codigo, setCodigo] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [evaluating, setEvaluating] = useState(false)
-  const [resultadoTerminal, setResultadoTerminal] = useState<string>('')
+  // Aviso que se muestra tras entregar. Sustituye a `resultadoTerminal`, que
+  // acumulaba mensajes (incluido el fallo al registrar asistencia) pero no se
+  // renderizaba en ninguna parte: los errores se perdian en silencio.
+  const [avisoEntrega, setAvisoEntrega] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
   const [alertMessage, setAlertMessage] = useState<string | null>(null)
   const [previewAlert, setPreviewAlert] = useState<{ actual: string; esperado: string; esCorrecto: boolean } | null>(null)
   const [reglasAlert, setReglasAlert] = useState<string | null>(null)
@@ -215,7 +220,6 @@ export default function ResolverPracticaPage({ params }: { params: Promise<{ id:
 
     submissionLock.current = true
     setEvaluating(true)
-    setResultadoTerminal('Verificando reglas del código...\n')
 
     try {
       // ── Step 1: Static code rules check ────────────────────────────
@@ -224,14 +228,11 @@ export default function ResolverPracticaPage({ params }: { params: Promise<{ id:
         const fallo = verificarReglas(codigo, reglas)
         if (fallo) {
           setReglasAlert(fallo)
-          setResultadoTerminal('❌ Verificación de reglas fallida: el código no cumple todos los requisitos.')
           submissionLock.current = false
           setEvaluating(false)
           return
         }
       }
-
-      setResultadoTerminal('✅ Reglas verificadas. Comparando código con la solución base...\n')
 
       // 4. Validate output structually — show preview dialog
       const baseCodeInfo = practica?.codigo_base || ""
@@ -240,17 +241,12 @@ export default function ResolverPracticaPage({ params }: { params: Promise<{ id:
       
       const esCorrecto = normalizadoEstudiante === normalizadoBase
 
-      if (esCorrecto) {
-        setResultadoTerminal((prev) => prev + '✅ Código correcto estructuralmente. Confirma tu entrega.\n')
-      } else {
-        setResultadoTerminal((prev) => prev + '❌ El código no coincide con la estructura esperada.\n')
-      }
 
       setPreviewAlert({ actual: codigo, esperado: baseCodeInfo, esCorrecto })
       
     } catch (err: unknown) {
       console.error('Error evaluando:', err)
-      setResultadoTerminal((prev) => prev + "\nError interno del servidor/navegador.")
+      setAvisoEntrega({ tipo: 'error', texto: `No se pudo evaluar tu codigo: ${mensajeDeError(err)}` })
     } finally {
       setEvaluating(false)
       submissionLock.current = false // Liberamos el candado para permitir reintentos
@@ -283,22 +279,33 @@ export default function ResolverPracticaPage({ params }: { params: Promise<{ id:
         cacheClear(`entregas_${estudianteId}`)
 
         if (practica?.configuracion?.asistencia) {
-          const nowInstance = new Date()
-          const fechaStr = nowInstance.toISOString().split('T')[0]
-          const horaStr = `${String(nowInstance.getHours()).padStart(2, '0')}:${String(nowInstance.getMinutes()).padStart(2, '0')}`
+          // fecha y hora deben salir del MISMO huso: antes la fecha venia de
+          // toISOString() (UTC) y la hora de getHours() (local), asi que una
+          // entrega despues de las 20:00 quedaba con la hora de un dia y la
+          // fecha del siguiente.
+          const fechaStr = hoyISO()
+          const horaStr = horaActual()
           
           const { error: attendanceError } = await supabase.from('asistencias').insert([{
             estudiante_id: estudianteId,
             fecha: fechaStr,
             hora: horaStr,
-            estado: 'presente'
+            estado: 'presente',
+            // No es un pase de lista: marca la presencia pero no define
+            // que ese dia hubo clase (ver scripts/06-dias-clase.sql)
+            origen: 'practica'
           }])
           
           if (attendanceError) {
             console.error('Error al registrar asistencia:', attendanceError)
-            setResultadoTerminal((prev) => prev + `\n❌ Error al registrar asistencia: ${attendanceError.message}`)
+            setAvisoEntrega({
+              tipo: 'error',
+              texto:
+                'Tu entrega se guardó correctamente, pero NO se pudo registrar tu asistencia: ' +
+                `${attendanceError.message}. Avisa al auxiliar para que la marque a mano.`,
+            })
           } else {
-            setResultadoTerminal((prev) => prev + "\n✅ Asistencia registrada automáticamente.")
+            setAvisoEntrega({ tipo: 'ok', texto: 'Entrega guardada y asistencia registrada.' })
           }
         }
       } else {
@@ -315,7 +322,9 @@ export default function ResolverPracticaPage({ params }: { params: Promise<{ id:
       
     } catch (err: unknown) {
       console.error('Error evaluando o enviando:', err)
-      setResultadoTerminal((prev) => prev + "\nError interno del servidor/navegador.")
+      // Sin esto el dialogo de confirmacion se quedaba abierto y sin explicacion.
+      setPreviewAlert(null)
+      setAvisoEntrega({ tipo: 'error', texto: `No se pudo registrar tu entrega: ${mensajeDeError(err)}` })
     } finally {
       setEvaluating(false)
       submissionLock.current = false
@@ -520,6 +529,20 @@ export default function ResolverPracticaPage({ params }: { params: Promise<{ id:
           </Card>
           </div>
         </div>
+
+        <AlertDialog open={!!avisoEntrega} onOpenChange={(open) => !open && setAvisoEntrega(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className={avisoEntrega?.tipo === 'ok' ? 'text-emerald-600' : 'text-destructive'}>
+                {avisoEntrega?.tipo === 'ok' ? 'Entrega registrada' : 'Hubo un problema'}
+              </AlertDialogTitle>
+              <AlertDialogDescription>{avisoEntrega?.texto}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogAction onClick={() => setAvisoEntrega(null)}>Entendido</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={!!alertMessage} onOpenChange={(open) => !open && setAlertMessage(null)}>
           <AlertDialogContent>

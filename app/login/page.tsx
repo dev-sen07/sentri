@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { signIn } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Eye, EyeOff, Sparkles, LogIn, GraduationCap } from 'lucide-react'
+import { Eye, EyeOff, Sparkles, LogIn } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function LoginPage() {

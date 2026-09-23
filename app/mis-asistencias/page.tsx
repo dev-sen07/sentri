@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, AsistenciaRow } from '@/lib/supabase'
-import { Header } from '@/components/header'
+import { formatFechaLarga } from '@/lib/fecha'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -119,7 +119,11 @@ export default function MisAsistenciasPage() {
         <div className="grid gap-6">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Mis Asistencias</h1>
-            <p className="text-muted-foreground mt-2">Consulta tu historial de asistencias</p>
+            <p className="text-muted-foreground mt-2">
+              {studentName
+                ? `Historial de asistencias de ${studentName}`
+                : 'Consulta tu historial de asistencias'}
+            </p>
           </div>
 
           <div className="grid md:grid-cols-4 gap-4">
@@ -184,12 +188,7 @@ export default function MisAsistenciasPage() {
                       {asistencias.map((asistencia) => (
                         <TableRow key={asistencia.id}>
                           <TableCell>
-                            {new Date(asistencia.fecha).toLocaleDateString('es-ES', {
-                              weekday: 'long',
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                            })}
+                            {formatFechaLarga(asistencia.fecha)}
                           </TableCell>
                           <TableCell>{asistencia.hora}</TableCell>
                           <TableCell>

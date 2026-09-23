@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Download, GraduationCap, Table as TableIcon, ArrowLeft } from 'lucide-react'
+import { GraduationCap, Table as TableIcon, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
 type LiberacionReporte = {

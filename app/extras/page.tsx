@@ -3,15 +3,26 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, EstudianteRow, ActividadRow } from '@/lib/supabase'
-import { cacheGet, cacheSet } from '@/lib/cache'
+
+import { unoDe, type EstudianteEmbebido } from '@/lib/supabase'
+import { actividadCerrada } from '@/lib/fecha'
+import { hoyISO } from '@/lib/fecha'
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
-  Star, PlusCircle, Search, UserCheck, Sparkles, Activity,
-  CheckCircle, RefreshCw, Users, Calendar, Trash2,
+  Star,
+  PlusCircle,
+  Search,
+  UserCheck,
+  Sparkles,
+  Activity,
+  CheckCircle,
+  RefreshCw,
+  Users,
+  Calendar,
 } from 'lucide-react'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -36,24 +47,11 @@ interface ActividadConParticipantes extends ActividadRow {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function isActividadCerrada(act: ActividadRow): boolean {
-  if (!act.hora_fin) return false
-  const now = new Date()
-  const close = new Date(`${act.fecha}T${act.hora_fin}`)
-  return now > close
-}
-
-function formatHora(h: string): string {
-  return h.slice(0, 5)
-}
-
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function ExtrasPage() {
   const router = useRouter()
   const [tab, setTab] = useState<'puntos' | 'actividades'>('puntos')
   const [initialLoading, setInitialLoading] = useState(true)
-
-
 
   // ─── Auth check ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -66,7 +64,6 @@ export default function ExtrasPage() {
           .from('usuarios_roles').select('rol').eq('user_id', session.user.id).single()
         if (!roleData || roleData.rol !== 'auxiliar') { router.push('/dashboard'); return }
 
-
       } catch (err) {
         console.error(err)
       } finally {
@@ -75,8 +72,6 @@ export default function ExtrasPage() {
     }
     init()
   }, [router])
-
-
 
   if (initialLoading) {
     return (
@@ -421,7 +416,7 @@ function ActividadesTab() {
   const [searchLoading, setSearchLoading] = useState(false)
   // Create activity form
   const [nombreActividad, setNombreActividad] = useState('')
-  const [fechaActividad, setFechaActividad] = useState(new Date().toISOString().split('T')[0])
+  const [fechaActividad, setFechaActividad] = useState(hoyISO())
   const [ponderacionActividad, setPonderacionActividad] = useState('10')
   const [horaInicioActividad, setHoraInicioActividad] = useState('')
   const [horaFinActividad, setHoraFinActividad] = useState('')
@@ -517,13 +512,16 @@ function ActividadesTab() {
         .eq('actividad_id', actividadId)
         .order('registrado_en', { ascending: false })
       if (!error && data) {
-        const mapped = data.map((p: any) => ({
-          id: p.id,
-          estudiante_id: p.estudiante_id,
-          nombre: (Array.isArray(p.estudiantes) ? p.estudiantes[0] : p.estudiantes)?.nombre || '',
-          apellido: (Array.isArray(p.estudiantes) ? p.estudiantes[0] : p.estudiantes)?.apellido || '',
-          ci: (Array.isArray(p.estudiantes) ? p.estudiantes[0] : p.estudiantes)?.ci || '',
-        }))
+        const mapped = data.map((p) => {
+          const est = unoDe<EstudianteEmbebido>(p.estudiantes)
+          return {
+            id: p.id,
+            estudiante_id: p.estudiante_id,
+            nombre: est?.nombre || '',
+            apellido: est?.apellido || '',
+            ci: est?.ci || '',
+          }
+        })
         setParticipantes(mapped)
       }
     } catch (err) {
@@ -575,7 +573,7 @@ function ActividadesTab() {
 
   const handleAgregarParticipante = async () => {
     if (!foundStudent || !actividadSeleccionada) return
-    if (isActividadCerrada(actividadSeleccionada)) {
+    if (actividadCerrada(actividadSeleccionada.fecha, actividadSeleccionada.hora_fin)) {
       setAddError('Esta actividad ya está cerrada y no se admiten nuevos registros.')
       return
     }

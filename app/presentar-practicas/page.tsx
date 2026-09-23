@@ -50,7 +50,6 @@ type EntregaConEstudiante = PresentacionEntregaRow & {
 export function PresentarPracticasContent() {
   const router = useRouter()
   const [userRole, setUserRole] = useState<UserRole | null>(null)
-  const [userId, setUserId] = useState<string | null>(null)
   const [estudianteId, setEstudianteId] = useState<string | null>(null)
   const [estudianteNombre, setEstudianteNombre] = useState<string>('')
   const [estudianteParalelo, setEstudianteParalelo] = useState<string>('')
@@ -60,8 +59,6 @@ export function PresentarPracticasContent() {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.push('/login'); return }
-
-      setUserId(session.user.id)
 
       const { data: roleData } = await supabase
         .from('usuarios_roles')
@@ -120,6 +117,43 @@ export function PresentarPracticasContent() {
    VISTA ESTUDIANTE
    ═══════════════════════════════════════════════════════════════ */
 
+type DatosEstudiante = {
+  tareas: PresentacionTareaRow[]
+  entregas: Record<string, PresentacionEntregaRow>
+}
+
+/**
+ * Trae tareas y entregas del estudiante. Las dos consultas son independientes,
+ * asi que van en paralelo (antes se encadenaban con await y tardaban el doble).
+ * No toca estado: quien la llama decide si el resultado sigue siendo vigente.
+ */
+async function cargarDatosEstudiante(
+  estudianteId: string,
+  paralelo: string,
+): Promise<DatosEstudiante> {
+  const [tareasRes, entregasRes] = await Promise.all([
+    supabase
+      .from('presentaciones_tareas')
+      .select('*')
+      .eq('paralelo', paralelo)
+      .order('creado_en', { ascending: false }),
+    supabase
+      .from('presentaciones_entregas')
+      .select('*')
+      .eq('estudiante_id', estudianteId),
+  ])
+
+  if (tareasRes.error) console.error('Error al cargar tareas:', tareasRes.error)
+  if (entregasRes.error) console.error('Error al cargar entregas:', entregasRes.error)
+
+  const entregas: Record<string, PresentacionEntregaRow> = {}
+  ;(entregasRes.data ?? []).forEach((e) => {
+    entregas[e.tarea_id] = e as PresentacionEntregaRow
+  })
+
+  return { tareas: tareasRes.data ?? [], entregas }
+}
+
 function EstudianteView({
   estudianteId,
   estudianteNombre,
@@ -134,32 +168,26 @@ function EstudianteView({
   const [loading, setLoading] = useState(true)
   const [selectedTarea, setSelectedTarea] = useState<PresentacionTareaRow | null>(null)
 
-  const fetchData = useCallback(async () => {
-    // Fetch tasks for student's paralelo
-    const { data: tareasData } = await supabase
-      .from('presentaciones_tareas')
-      .select('*')
-      .eq('paralelo', estudianteParalelo)
-      .order('creado_en', { ascending: false })
-
-    if (tareasData) setTareas(tareasData)
-
-    // Fetch student's submissions
-    const { data: entregasData } = await supabase
-      .from('presentaciones_entregas')
-      .select('*')
-      .eq('estudiante_id', estudianteId)
-
-    if (entregasData) {
-      const map: Record<string, PresentacionEntregaRow> = {}
-      entregasData.forEach((e) => { map[e.tarea_id] = e as PresentacionEntregaRow })
-      setEntregas(map)
-    }
-
+  const aplicar = useCallback((d: DatosEstudiante) => {
+    setTareas(d.tareas)
+    setEntregas(d.entregas)
     setLoading(false)
-  }, [estudianteId, estudianteParalelo])
+  }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  // Recarga manual (al volver de una entrega)
+  const fetchData = useCallback(async () => {
+    aplicar(await cargarDatosEstudiante(estudianteId, estudianteParalelo))
+  }, [estudianteId, estudianteParalelo, aplicar])
+
+  useEffect(() => {
+    // `vivo` descarta respuestas obsoletas: si las props cambian antes de que
+    // vuelva la consulta, la respuesta vieja ya no debe pisar a la nueva.
+    let vivo = true
+    cargarDatosEstudiante(estudianteId, estudianteParalelo).then((d) => {
+      if (vivo) aplicar(d)
+    })
+    return () => { vivo = false }
+  }, [estudianteId, estudianteParalelo, aplicar])
 
   if (selectedTarea) {
     return (

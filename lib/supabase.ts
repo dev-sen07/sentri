@@ -7,7 +7,27 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
+// Cliente de navegador único (SSR-safe) usado en toda la app.
 export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
+
+/**
+ * Normaliza una relacion embebida de PostgREST.
+ *
+ * Segun como infiera la cardinalidad, PostgREST devuelve la relacion como
+ * objeto o como array de un elemento. El codigo lo resolvia con
+ * `Array.isArray(x) ? x[0] : x` repetido en cada sitio y tipado como `any`.
+ */
+export function unoDe<T>(rel: T | T[] | null | undefined): T | null {
+  if (Array.isArray(rel)) return rel[0] ?? null
+  return rel ?? null
+}
+
+/** Datos minimos del estudiante que se embeben en varias consultas. */
+export type EstudianteEmbebido = {
+  nombre: string
+  apellido: string
+  ci: string
+}
 
 export type EstudianteRow = {
   id: string
@@ -27,6 +47,8 @@ export type AsistenciaRow = {
   fecha: string
   hora: string
   estado: 'presente' | 'ausente' | 'retraso'
+  // 'clase' = pase de lista normal; 'practica' = alta automatica al entregar
+  origen?: 'clase' | 'practica'
 }
 
 export type UsuarioRolRow = {
@@ -159,6 +181,32 @@ export type VistaCalificacionesRow = {
   puntos_actividades: number
   puntos_presentaciones: number
   nota_final: number
+}
+
+export type PeriodoParcialRow = {
+  id: string
+  parcial: 1 | 2 | 3
+  fecha_inicio: string
+  fecha_fin: string
+  // Dias de la semana en que se dicta clase: 0=domingo ... 6=sabado
+  dias_semana: number[]
+  activo: boolean
+  creado_en: string
+  actualizado_en: string
+}
+
+export type VistaCalificacionesParcialRow = {
+  estudiante_id: string
+  parcial: 1 | 2 | 3
+  fecha_inicio: string
+  fecha_fin: string
+  dias_semana: number[]
+  tope_asistencia_parcial: number
+  total_clases_parcial: number
+  asistencias_presente: number
+  nota_asistencia: number
+  extras_acumulados: number
+  nota_parcial: number
 }
 
 export type LiberacionRow = {

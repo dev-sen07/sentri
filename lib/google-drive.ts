@@ -1,3 +1,4 @@
+import { Readable } from 'stream'
 import { google } from 'googleapis'
 
 const SCOPES = ['https://www.googleapis.com/auth/drive.file']
@@ -83,7 +84,7 @@ export async function uploadFile(
     },
     media: {
       mimeType,
-      body: require('stream').Readable.from(buffer),
+      body: Readable.from(buffer),
     },
     fields: 'id, name, webViewLink',
     supportsAllDrives: true,

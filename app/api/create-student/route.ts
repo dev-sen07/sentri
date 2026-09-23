@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { mensajeDeError } from '@/lib/utils'
 
 // Initialize a supabase client with the service role key to bypass RLS and use auth admin
 const supabaseAdmin = createClient(
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true, user: authData.user }, { status: 201 })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Server error' }, { status: 500 })
+  } catch (err: unknown) {
+    return NextResponse.json({ error: mensajeDeError(err, 'Server error') }, { status: 500 })
   }
 }

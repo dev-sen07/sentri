@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, EstudianteRow, ActividadRow } from '@/lib/supabase'
+import { unoDe, type EstudianteEmbebido } from '@/lib/supabase'
+import { actividadCerrada, formatHora } from '@/lib/fecha'
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@/components/ui/card'
@@ -26,17 +28,6 @@ interface Participante {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function isActividadCerrada(act: ActividadRow): boolean {
-  if (!act.hora_fin) return false
-  const now = new Date()
-  const close = new Date(`${act.fecha}T${act.hora_fin}`)
-  return now > close
-}
-
-function formatHora(h: string): string {
-  return h.slice(0, 5)
-}
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 export default function MisActividadesPage() {
@@ -126,13 +117,16 @@ export default function MisActividadesPage() {
         .eq('actividad_id', actividadId)
         .order('registrado_en', { ascending: false })
       if (!error && data) {
-        const mapped: Participante[] = data.map((p: any) => ({
-          id: p.id,
-          estudiante_id: p.estudiante_id,
-          nombre: (Array.isArray(p.estudiantes) ? p.estudiantes[0] : p.estudiantes)?.nombre || '',
-          apellido: (Array.isArray(p.estudiantes) ? p.estudiantes[0] : p.estudiantes)?.apellido || '',
-          ci: (Array.isArray(p.estudiantes) ? p.estudiantes[0] : p.estudiantes)?.ci || '',
-        }))
+        const mapped: Participante[] = data.map((p) => {
+          const est = unoDe<EstudianteEmbebido>(p.estudiantes)
+          return {
+            id: p.id,
+            estudiante_id: p.estudiante_id,
+            nombre: est?.nombre || '',
+            apellido: est?.apellido || '',
+            ci: est?.ci || '',
+          }
+        })
         setParticipantes(mapped)
       }
     } catch (err) {
@@ -196,7 +190,7 @@ export default function MisActividadesPage() {
 
   const handleAgregarParticipante = async () => {
     if (!foundStudent || !actividadSeleccionada) return
-    if (isActividadCerrada(actividadSeleccionada)) return
+    if (actividadCerrada(actividadSeleccionada.fecha, actividadSeleccionada.hora_fin)) return
 
     setAddingParticipant(true)
     setAddError(null)
@@ -287,7 +281,7 @@ export default function MisActividadesPage() {
                 ) : (
                   <div className="space-y-2">
                     {actividades.map(act => {
-                      const cerrada = isActividadCerrada(act)
+                      const cerrada = actividadCerrada(act.fecha, act.hora_fin)
                       return (
                         <button
                           key={act.id}
@@ -347,7 +341,7 @@ export default function MisActividadesPage() {
               <>
                 {/* Activity info banner */}
                 <div className={`flex items-start justify-between gap-4 p-4 rounded-xl border ${
-                  isActividadCerrada(actividadSeleccionada)
+                  actividadCerrada(actividadSeleccionada.fecha, actividadSeleccionada.hora_fin)
                     ? 'bg-muted/50 border-border'
                     : 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800'
                 }`}>
@@ -361,7 +355,7 @@ export default function MisActividadesPage() {
                       )}
                     </p>
                   </div>
-                  {isActividadCerrada(actividadSeleccionada) ? (
+                  {actividadCerrada(actividadSeleccionada.fecha, actividadSeleccionada.hora_fin) ? (
                     <span className="flex shrink-0 items-center gap-1.5 text-xs font-semibold bg-muted text-muted-foreground px-3 py-1.5 rounded-full border">
                       <Lock className="w-3.5 h-3.5" /> Cerrada
                     </span>
@@ -384,7 +378,7 @@ export default function MisActividadesPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {isActividadCerrada(actividadSeleccionada) ? (
+                    {actividadCerrada(actividadSeleccionada.fecha, actividadSeleccionada.hora_fin) ? (
                       <div className="py-6 text-center">
                         <Lock className="w-8 h-8 mx-auto mb-2 text-muted-foreground/30" />
                         <p className="text-muted-foreground text-sm font-medium">Actividad cerrada</p>

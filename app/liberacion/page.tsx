@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase, LiberacionRow, ArchivoMetadata } from '@/lib/supabase'
 import { cacheGet, cacheSet } from '@/lib/cache'
@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 // Tabs: using custom underline style (see marcar-asistencia pattern)
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+
 import { LiberacionAdminContent } from './admin/page'
 import {
   AlertDialog,
@@ -19,13 +19,6 @@ import {
   AlertDialogFooter,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 
 /* ═══════════════════════════════════════════════════════════════
    NOTA: mapRawToLiberacionRow fue eliminada.
@@ -48,13 +41,7 @@ import {
   Trash2,
   Send,
   ArrowLeft,
-  Shield,
-  Users,
-  Eye,
-  ChevronLeft,
-  ChevronRight,
   AlertCircle,
-  Plus,
 } from 'lucide-react'
 /* ═══════════════════════════════════════════════════════════════
    HORARIOS DISPONIBLES
@@ -1462,7 +1449,6 @@ function ExamenPresentacionView({
         </div>
       )}
 
-
       {error && (
         <div className="flex items-center gap-2 text-sm text-red-400 bg-red-500/10 border border-red-500/30 px-4 py-3 rounded-lg">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -1603,5 +1589,4 @@ function EstadoBadge({ estado }: { estado: string | null }) {
     </span>
   )
 }
-
 

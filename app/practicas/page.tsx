@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, PracticaRow } from "@/lib/supabase";
+import { unoDe } from "@/lib/supabase";
+import { mensajeDeError } from "@/lib/utils";
 import { cacheGet, cacheSet } from "@/lib/cache";
 import {
   Card,
@@ -187,10 +189,10 @@ export function PracticasContent() {
         if (!entregasError && entregasRevisar) {
           const mapped = entregasRevisar.map((e) => ({
             ...e,
-            estudiantes: Array.isArray(e.estudiantes) ? e.estudiantes[0] : e.estudiantes,
-            practicas: Array.isArray(e.practicas) ? e.practicas[0] : e.practicas,
+            estudiantes: unoDe(e.estudiantes),
+            practicas: unoDe(e.practicas),
           }));
-          setEntregasAll(mapped as any);
+          setEntregasAll(mapped as EntregaRevision[]);
         }
 
         const { data: practicasData, error: practicasError } = await supabase
@@ -208,9 +210,16 @@ export function PracticasContent() {
     }
   }, [router, estudianteId, estudianteParalelo]);
 
+  // Carga inicial unica. `fetchAllData` se recrea cuando cambian estudianteId /
+  // estudianteParalelo (que la propia funcion asigna), asi que declararla como
+  // dependencia sin guarda la volveria a disparar; el ref deja la dependencia
+  // declarada de forma honesta y garantiza una sola ejecucion.
+  const cargaInicial = useRef(false);
   useEffect(() => {
+    if (cargaInicial.current) return;
+    cargaInicial.current = true;
     fetchAllData();
-  }, []);
+  }, [fetchAllData]);
 
   const executeDelete = async () => {
     if (!deleteId) return;
@@ -222,8 +231,8 @@ export function PracticasContent() {
         .eq("id", deleteId);
       if (error) throw error;
       setPracticas((prev) => prev.filter((p) => p.id !== deleteId));
-    } catch (error: any) {
-      setErrorDialog("Error al eliminar: " + error.message);
+    } catch (error: unknown) {
+      setErrorDialog("Error al eliminar: " + mensajeDeError(error));
     } finally {
       setDeleteId(null);
       setLoading(false);
@@ -356,8 +365,8 @@ export function PracticasContent() {
       );
       setGradingEntrega(null);
       setNewNota("");
-    } catch (err: any) {
-      setErrorDialog("Error al calificar: " + err.message);
+    } catch (err: unknown) {
+      setErrorDialog("Error al calificar: " + mensajeDeError(err));
     }
   };
 

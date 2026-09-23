@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { supabase, LiberacionRow, ArchivoMetadata } from '@/lib/supabase'
-import { cacheGet, cacheSet } from '@/lib/cache'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 // Tabs: using custom underline style (see marcar-asistencia pattern)
 import { Button } from '@/components/ui/button'
@@ -36,25 +36,18 @@ import {
 
 import {
   GraduationCap,
-  Search,
-  AlertTriangle,
   Clock,
-  Calendar,
   CheckCircle,
   Upload,
   FileText,
   FileCode,
   ExternalLink,
   Trash2,
-  Send,
-  ArrowLeft,
   Shield,
   Users,
   Eye,
   ChevronLeft,
   ChevronRight,
-  AlertCircle,
-  Plus,
 } from 'lucide-react'
 
 /* ═══════════════════════════════════════════════════════════════

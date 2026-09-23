@@ -1,8 +1,13 @@
-'use client'
+﻿'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, EstudianteRow } from '@/lib/supabase'
+import {
+  supabase,
+  EstudianteRow,
+  VistaCalificacionesParcialRow,
+  PeriodoParcialRow,
+} from '@/lib/supabase'
 import * as XLSX from 'xlsx'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
@@ -29,7 +34,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Download, FileText, Table as TableIcon } from 'lucide-react'
+import { FileText, Table as TableIcon } from 'lucide-react'
+
+type ParcialKey = 1 | 2 | 3
+type FiltroParcial = 'all' | ParcialKey
+
+type ParcialData = {
+  parcial: ParcialKey
+  nota_parcial: number
+  nota_asistencia: number
+  asistencias_presente: number
+  total_clases_parcial: number
+  tope_asistencia_parcial: number
+  extras_acumulados: number
+}
 
 type EstudianteReporte = EstudianteRow & {
   notaAsistencia: number
@@ -37,13 +55,30 @@ type EstudianteReporte = EstudianteRow & {
   puntosActividades: number
   puntosPresentaciones: number
   notaFinal: number
+  parciales: Record<ParcialKey, ParcialData | null>
+}
+
+type PeriodoInfo = {
+  parcial: ParcialKey
+  fecha_inicio: string
+  fecha_fin: string
+}
+
+const PARCIALES: ParcialKey[] = [1, 2, 3]
+
+function fmtFecha(iso?: string): string {
+  if (!iso) return '-'
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${y}`
 }
 
 export default function ReporteEstudiantesPage() {
   const router = useRouter()
   const [estudiantes, setEstudiantes] = useState<EstudianteReporte[]>([])
+  const [periodos, setPeriodos] = useState<PeriodoInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [filterParalelo, setFilterParalelo] = useState<string>('all')
+  const [filterParcial, setFilterParcial] = useState<FiltroParcial>('all')
 
   useEffect(() => {
     const fetchReporte = async () => {
@@ -65,27 +100,44 @@ export default function ReporteEstudiantesPage() {
           return
         }
 
-        // 2 queries optimizadas en lugar de 5:
-        // 1. Estudiantes ordenados
-        // 2. Vista de calificaciones (todo precalculado en SQL)
+        // 4 queries en paralelo: estudiantes, nota global, notas por parcial, periodos
         const [
           { data: estudiantesData },
           { data: calificacionesData },
+          { data: parcialesData },
+          { data: periodosData },
         ] = await Promise.all([
           supabase.from('estudiantes').select('*').order('apellido', { ascending: true }),
           supabase.from('vista_calificaciones').select('*'),
+          supabase.from('vista_calificaciones_parciales').select('*'),
+          supabase.from('periodos_parciales').select('parcial, fecha_inicio, fecha_fin').eq('activo', true),
         ])
 
         if (!estudiantesData) return
 
-        // Mapear calificaciones por estudiante_id para acceso O(1)
+        // Mapear calificaciones globales por estudiante_id (O(1))
         const calificacionesMap = new Map(
-          (calificacionesData || []).map(c => [c.estudiante_id, c])
+          (calificacionesData || []).map((c) => [c.estudiante_id, c]),
         )
 
-        const reporte = estudiantesData.map(est => {
-          const cal = calificacionesMap.get(est.id)
+        // Mapear parciales por estudiante_id -> parcial
+        const parcialesMap = new Map<string, Record<ParcialKey, ParcialData | null>>()
+        ;(parcialesData as VistaCalificacionesParcialRow[] | null)?.forEach((row) => {
+          const entry = parcialesMap.get(row.estudiante_id) ?? { 1: null, 2: null, 3: null }
+          entry[row.parcial] = {
+            parcial: row.parcial,
+            nota_parcial: Number(row.nota_parcial) || 0,
+            nota_asistencia: Number(row.nota_asistencia) || 0,
+            asistencias_presente: Number(row.asistencias_presente) || 0,
+            total_clases_parcial: Number(row.total_clases_parcial) || 0,
+            tope_asistencia_parcial: Number(row.tope_asistencia_parcial) || 0,
+            extras_acumulados: Number(row.extras_acumulados) || 0,
+          }
+          parcialesMap.set(row.estudiante_id, entry)
+        })
 
+        const reporte: EstudianteReporte[] = estudiantesData.map((est) => {
+          const cal = calificacionesMap.get(est.id)
           return {
             ...est,
             notaAsistencia: Number(cal?.nota_asistencia) || 0,
@@ -93,10 +145,18 @@ export default function ReporteEstudiantesPage() {
             puntosActividades: Number(cal?.puntos_actividades) || 0,
             puntosPresentaciones: Number(cal?.puntos_presentaciones) || 0,
             notaFinal: Number(cal?.nota_final) || 0,
+            parciales: parcialesMap.get(est.id) ?? { 1: null, 2: null, 3: null },
           }
         })
 
         setEstudiantes(reporte)
+        setPeriodos(
+          (periodosData as PeriodoParcialRow[] | null)?.map((p) => ({
+            parcial: p.parcial,
+            fecha_inicio: p.fecha_inicio,
+            fecha_fin: p.fecha_fin,
+          })) ?? [],
+        )
       } catch (error) {
         console.error('Error fetching reporte:', error)
       } finally {
@@ -107,63 +167,131 @@ export default function ReporteEstudiantesPage() {
     fetchReporte()
   }, [router])
 
-  const filteredEstudiantes = filterParalelo === 'all' 
-    ? estudiantes 
-    : estudiantes.filter(e => e.paralelo === filterParalelo)
+  const filteredEstudiantes = useMemo(
+    () =>
+      filterParalelo === 'all'
+        ? estudiantes
+        : estudiantes.filter((e) => e.paralelo === filterParalelo),
+    [estudiantes, filterParalelo],
+  )
+
+  const periodoActual = useMemo(
+    () => (filterParcial === 'all' ? null : periodos.find((p) => p.parcial === filterParcial) ?? null),
+    [periodos, filterParcial],
+  )
+
+  const filtroLabel = `${filterParalelo !== 'all' ? `Paralelo ${filterParalelo}` : 'General'}${
+    filterParcial !== 'all' ? ` - Parcial ${filterParcial}` : ''
+  }`
 
   const handleExportExcel = () => {
-    const dataToExport = filteredEstudiantes.map((est, i) => ({
-      'Nro': i + 1,
-      'Apellidos': est.apellido,
-      'Nombres': est.nombre,
-      'CI': est.ci,
-      'RU': est.ru,
-      'Paralelo': est.paralelo,
-      'Asistencias (pts)': est.notaAsistencia.toFixed(2),
-      'Extras': est.puntosExtra.toFixed(2),
-      'Actividades': est.puntosActividades.toFixed(2),
-      'Prácticas': est.puntosPresentaciones.toFixed(2),
-      'Nota Final': est.notaFinal.toFixed(2)
-    }))
+    const dataToExport = filteredEstudiantes.map((est, i) => {
+      const base: Record<string, string | number> = {
+        Nro: i + 1,
+        Apellidos: est.apellido,
+        Nombres: est.nombre,
+        CI: est.ci,
+        RU: est.ru,
+        Paralelo: est.paralelo,
+      }
+
+      if (filterParcial === 'all') {
+        PARCIALES.forEach((p) => {
+          base[`Parcial ${p} (asist.)`] = (est.parciales[p]?.nota_asistencia ?? 0).toFixed(2)
+          base[`Parcial ${p} (extras)`] = (est.parciales[p]?.extras_acumulados ?? 0).toFixed(2)
+          base[`Parcial ${p} (nota)`] = (est.parciales[p]?.nota_parcial ?? 0).toFixed(2)
+        })
+      } else {
+        const pv = est.parciales[filterParcial]
+        base['Asistencias'] = `${pv?.asistencias_presente ?? 0}/${pv?.total_clases_parcial ?? 0}`
+        base['Pts Asistencia'] = `${(pv?.nota_asistencia ?? 0).toFixed(2)}/${pv?.tope_asistencia_parcial ?? 0}`
+        base['Extras acumulados'] = (pv?.extras_acumulados ?? 0).toFixed(2)
+        base['Nota Parcial'] = (pv?.nota_parcial ?? 0).toFixed(2)
+      }
+
+      base['Asistencia global'] = est.notaAsistencia.toFixed(2)
+      base['Extras'] = est.puntosExtra.toFixed(2)
+      base['Actividades'] = est.puntosActividades.toFixed(2)
+      base['Presentaciones'] = est.puntosPresentaciones.toFixed(2)
+      base['Nota Final'] = est.notaFinal.toFixed(2)
+      return base
+    })
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport)
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte Final")
-    XLSX.writeFile(workbook, `Reporte_Final_Sentri_${filterParalelo !== 'all' ? `Paralelo_${filterParalelo}` : 'General'}.xlsx`)
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Reporte')
+    XLSX.writeFile(workbook, `Reporte_Sentri_${filtroLabel.replace(/ /g, '_')}.xlsx`)
   }
 
   const handleExportPDF = () => {
-    const doc = new jsPDF()
-    
-    // Header
+    const doc = new jsPDF({ orientation: 'landscape' })
+
     doc.setFontSize(16)
-    doc.text(`Reporte Final de Estudiantes - ${filterParalelo !== 'all' ? `Paralelo ${filterParalelo}` : 'General'}`, 14, 20)
-    
+    doc.text(`Reporte de Estudiantes - ${filtroLabel}`, 14, 20)
+
     doc.setFontSize(10)
     doc.text(`Generado el: ${new Date().toLocaleDateString('es-BO')}`, 14, 28)
+    if (periodoActual) {
+      doc.text(
+        `Periodo: ${fmtFecha(periodoActual.fecha_inicio)} a ${fmtFecha(periodoActual.fecha_fin)}`,
+        14,
+        34,
+      )
+    }
 
-    const tableColumn = ["Nro", "Apellidos y Nombres", "CI", "RU", "Paralelo", "Nota Final"]
-    const tableRows = filteredEstudiantes.map((est, i) => [
-      i + 1,
-      `${est.apellido} ${est.nombre}`,
-      est.ci,
-      est.ru,
-      est.paralelo,
-      est.notaFinal.toFixed(2)
-    ])
+    let tableColumn: string[]
+    let tableRows: (string | number)[][]
+
+    if (filterParcial === 'all') {
+      tableColumn = [
+        'Nro', 'Apellidos y Nombres', 'CI', 'RU', 'Paralelo',
+        'P1', 'P2', 'P3', 'Nota Final',
+      ]
+      tableRows = filteredEstudiantes.map((est, i) => [
+        i + 1,
+        `${est.apellido} ${est.nombre}`,
+        est.ci,
+        est.ru,
+        est.paralelo,
+        (est.parciales[1]?.nota_parcial ?? 0).toFixed(2),
+        (est.parciales[2]?.nota_parcial ?? 0).toFixed(2),
+        (est.parciales[3]?.nota_parcial ?? 0).toFixed(2),
+        est.notaFinal.toFixed(2),
+      ])
+    } else {
+      tableColumn = [
+        'Nro', 'Apellidos y Nombres', 'CI', 'RU', 'Paralelo',
+        'Asist.', 'Pts Asist.', 'Extras', 'Nota Parcial', 'Nota Final',
+      ]
+      tableRows = filteredEstudiantes.map((est, i) => {
+        const pv = est.parciales[filterParcial]
+        return [
+          i + 1,
+          `${est.apellido} ${est.nombre}`,
+          est.ci,
+          est.ru,
+          est.paralelo,
+          `${pv?.asistencias_presente ?? 0}/${pv?.total_clases_parcial ?? 0}`,
+          `${(pv?.nota_asistencia ?? 0).toFixed(2)}/${pv?.tope_asistencia_parcial ?? 0}`,
+          (pv?.extras_acumulados ?? 0).toFixed(2),
+          (pv?.nota_parcial ?? 0).toFixed(2),
+          est.notaFinal.toFixed(2),
+        ]
+      })
+    }
 
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     doc.autoTable({
       head: [tableColumn],
       body: tableRows,
-      startY: 35,
+      startY: periodoActual ? 40 : 35,
       theme: 'grid',
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [15, 118, 110] } // teal-700
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [15, 118, 110] },
     })
 
-    doc.save(`Reporte_Final_Sentri_${filterParalelo !== 'all' ? `Paralelo_${filterParalelo}` : 'General'}.pdf`)
+    doc.save(`Reporte_Sentri_${filtroLabel.replace(/ /g, '_')}.pdf`)
   }
 
   if (loading) {
@@ -179,9 +307,9 @@ export default function ReporteEstudiantesPage() {
       <main className="max-w-7xl mx-auto px-4 pt-8 pb-20">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Reporte Final</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Reporte de Estudiantes</h1>
             <p className="text-muted-foreground mt-2">
-              Visualiza y exporta las notas consolidadas de los estudiantes.
+              Visualiza y exporta las notas por parcial y por paralelo.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
@@ -194,6 +322,20 @@ export default function ReporteEstudiantesPage() {
                 <SelectItem value="A">Paralelo A</SelectItem>
                 <SelectItem value="B">Paralelo B</SelectItem>
                 <SelectItem value="C">Paralelo C</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={String(filterParcial)}
+              onValueChange={(v) => setFilterParcial(v === 'all' ? 'all' : (Number(v) as ParcialKey))}
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filtrar Parcial" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Los 3 parciales</SelectItem>
+                <SelectItem value="1">Parcial 1</SelectItem>
+                <SelectItem value="2">Parcial 2</SelectItem>
+                <SelectItem value="3">Parcial 3</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline" className="border-green-600 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/20" onClick={handleExportExcel}>
@@ -210,7 +352,10 @@ export default function ReporteEstudiantesPage() {
         <Card>
           <CardHeader>
             <CardTitle>Listado de Estudiantes</CardTitle>
-            <CardDescription>Mostrando {filteredEstudiantes.length} estudiantes del paralelo seleccionado.</CardDescription>
+            <CardDescription>
+              Mostrando {filteredEstudiantes.length} estudiantes - {filtroLabel}
+              {periodoActual && ` (${fmtFecha(periodoActual.fecha_inicio)} a ${fmtFecha(periodoActual.fecha_fin)})`}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {filteredEstudiantes.length === 0 ? (
@@ -225,6 +370,20 @@ export default function ReporteEstudiantesPage() {
                       <TableHead>CI</TableHead>
                       <TableHead>RU</TableHead>
                       <TableHead className="text-center">Paralelo</TableHead>
+                      {filterParcial === 'all' ? (
+                        <>
+                          <TableHead className="text-center">P1</TableHead>
+                          <TableHead className="text-center">P2</TableHead>
+                          <TableHead className="text-center">P3</TableHead>
+                        </>
+                      ) : (
+                        <>
+                          <TableHead className="text-center">Asist.</TableHead>
+                          <TableHead className="text-center">Pts Asist.</TableHead>
+                          <TableHead className="text-center">Extras</TableHead>
+                          <TableHead className="text-center font-bold">Nota Parcial</TableHead>
+                        </>
+                      )}
                       <TableHead className="text-right font-bold text-primary">Nota Final</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -236,6 +395,35 @@ export default function ReporteEstudiantesPage() {
                         <TableCell>{est.ci}</TableCell>
                         <TableCell>{est.ru}</TableCell>
                         <TableCell className="text-center font-semibold">{est.paralelo}</TableCell>
+                        {filterParcial === 'all' ? (
+                          <>
+                            {PARCIALES.map((p) => (
+                              <TableCell key={p} className="text-center">
+                                {(est.parciales[p]?.nota_parcial ?? 0).toFixed(2)}
+                              </TableCell>
+                            ))}
+                          </>
+                        ) : (
+                          (() => {
+                            const pv = est.parciales[filterParcial]
+                            return (
+                              <>
+                                <TableCell className="text-center">
+                                  {pv?.asistencias_presente ?? 0}/{pv?.total_clases_parcial ?? 0}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {(pv?.nota_asistencia ?? 0).toFixed(2)}/{pv?.tope_asistencia_parcial ?? 0}
+                                </TableCell>
+                                <TableCell className="text-center text-emerald-600 dark:text-emerald-400">
+                                  +{(pv?.extras_acumulados ?? 0).toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-center font-semibold">
+                                  {(pv?.nota_parcial ?? 0).toFixed(2)}
+                                </TableCell>
+                              </>
+                            )
+                          })()
+                        )}
                         <TableCell className="text-right">
                           <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-primary/10 text-primary font-bold">
                             {est.notaFinal.toFixed(2)}
