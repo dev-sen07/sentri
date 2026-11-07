@@ -195,6 +195,14 @@ export type PeriodoParcialRow = {
   actualizado_en: string
 }
 
+export type ClaseJustificadaRow = {
+  fecha: string
+  motivo: string
+  // Solo una clase invalidada sale del total y deja de valer puntos
+  invalidada: boolean
+  creado_en: string
+}
+
 export type VistaCalificacionesParcialRow = {
   estudiante_id: string
   parcial: 1 | 2 | 3

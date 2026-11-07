@@ -2,8 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase, PeriodoParcialRow } from '@/lib/supabase'
-import { parseFechaCivil, diaSemanaDe, formatFechaCorta } from '@/lib/fecha'
+import { supabase, PeriodoParcialRow, ClaseJustificadaRow } from '@/lib/supabase'
+import {
+  aISO,
+  hoyISO,
+  parseFechaCivil,
+  diaSemanaDe,
+  formatFechaCorta,
+} from '@/lib/fecha'
 import {
   Card,
   CardContent,
@@ -34,9 +40,17 @@ type FormState = Record<1 | 2 | 3, ParcialForm>
 
 type FechaRegistrada = { fecha: string; origen: string | null }
 
+type Justificacion = Pick<ClaseJustificadaRow, 'motivo' | 'invalidada'>
+
 const PARCIALES: Array<1 | 2 | 3> = [1, 2, 3]
 
 const TOPES_FALLBACK: Record<1 | 2 | 3, number> = { 1: 3, 2: 3, 3: 4 }
+
+/**
+ * Tope de filas por tarjeta. Al teclear una fecha el input pasa por anios como
+ * 0002, y pintar una fila por cada clase de 2000 anios congelaria la pagina.
+ */
+const MAX_CLASES_VISIBLES = 60
 
 /**
  * Orden de PRESENTACION: la semana empieza en lunes, como se lee aqui.
@@ -81,23 +95,23 @@ function buildEmptyForm(): FormState {
 }
 
 /**
- * Cuantas sesiones de clase caen en el rango, por calendario.
+ * Fechas de las sesiones de clase que caen en el rango, por calendario.
  * No consulta asistencias: una clase cuenta aunque nadie haya asistido
- * o aunque aun no haya ocurrido.
+ * o aunque aun no haya ocurrido, salvo que se justifique.
  */
-function contarClases(inicio: string, fin: string, dias: number[]): number {
-  if (!inicio || !fin || dias.length === 0) return 0
+function fechasDeClase(inicio: string, fin: string, dias: number[]): string[] {
+  if (!inicio || !fin || dias.length === 0) return []
   const desde = parseFechaCivil(inicio)
   const hasta = parseFechaCivil(fin)
-  if (hasta < desde) return 0
+  if (hasta < desde) return []
 
-  let total = 0
+  const fechas: string[] = []
   const cursor = new Date(desde)
   while (cursor <= hasta) {
-    if (dias.includes(cursor.getDay())) total++
+    if (dias.includes(cursor.getDay())) fechas.push(aISO(cursor))
     cursor.setDate(cursor.getDate() + 1)
   }
-  return total
+  return fechas
 }
 
 export default function ParcialesPage() {
@@ -111,6 +125,12 @@ export default function ParcialesPage() {
   const [fechasRegistradas, setFechasRegistradas] = useState<FechaRegistrada[]>(
     [],
   )
+  /** Clases justificadas en el formulario, por fecha. */
+  const [justificadas, setJustificadas] = useState<
+    Record<string, Justificacion>
+  >({})
+  /** Fechas ya guardadas en BD: al guardar, las que ya no apliquen se borran. */
+  const [justificadasEnBD, setJustificadasEnBD] = useState<string[]>([])
 
   useEffect(() => {
     const init = async () => {
@@ -152,6 +172,28 @@ export default function ParcialesPage() {
             }
           })
           setForm(next)
+        }
+
+        const { data: justificadasData, error: justificadasError } =
+          await supabase
+            .from('clases_justificadas')
+            .select('fecha, motivo, invalidada')
+        if (justificadasError) {
+          console.error('clases_justificadas no disponible:', justificadasError)
+        } else if (justificadasData) {
+          const filas = justificadasData as Pick<
+            ClaseJustificadaRow,
+            'fecha' | 'motivo' | 'invalidada'
+          >[]
+          setJustificadas(
+            Object.fromEntries(
+              filas.map((j) => [
+                j.fecha,
+                { motivo: j.motivo, invalidada: j.invalidada },
+              ]),
+            ),
+          )
+          setJustificadasEnBD(filas.map((j) => j.fecha))
         }
 
         const { data: cfg } = await supabase
@@ -197,25 +239,52 @@ export default function ParcialesPage() {
     init()
   }, [router])
 
-  const clasesPorParcial = useMemo(() => {
+  const fechasPorParcial = useMemo(() => {
     return {
-      1: contarClases(
+      1: fechasDeClase(
         form[1].fecha_inicio,
         form[1].fecha_fin,
         form[1].dias_semana,
       ),
-      2: contarClases(
+      2: fechasDeClase(
         form[2].fecha_inicio,
         form[2].fecha_fin,
         form[2].dias_semana,
       ),
-      3: contarClases(
+      3: fechasDeClase(
         form[3].fecha_inicio,
         form[3].fecha_fin,
         form[3].dias_semana,
       ),
-    } as Record<1 | 2 | 3, number>
+    } as Record<1 | 2 | 3, string[]>
   }, [form])
+
+  /** Clases que cuentan para la asistencia: las programadas sin invalidar. */
+  const clasesPorParcial = useMemo(() => {
+    const contar = (p: 1 | 2 | 3) =>
+      fechasPorParcial[p].filter((f) => !justificadas[f]?.invalidada).length
+    return { 1: contar(1), 2: contar(2), 3: contar(3) } as Record<
+      1 | 2 | 3,
+      number
+    >
+  }, [fechasPorParcial, justificadas])
+
+  const fechasConRegistros = useMemo(
+    () => new Set(fechasRegistradas.map((r) => r.fecha)),
+    [fechasRegistradas],
+  )
+
+  /**
+   * Clases ya pasadas sin ningun registro y sin invalidar. Siguen en el total,
+   * asi que bajan la nota de todos: es lo que hay que revisar e invalidar.
+   */
+  const clasesSinAsistencia = useMemo(() => {
+    const hoy = hoyISO()
+    return PARCIALES.flatMap((p) => fechasPorParcial[p]).filter(
+      (f) =>
+        f < hoy && !justificadas[f]?.invalidada && !fechasConRegistros.has(f),
+    )
+  }, [fechasPorParcial, justificadas, fechasConRegistros])
 
   /**
    * Registros de pase de lista que no caen en ninguna sesion de clase:
@@ -270,6 +339,35 @@ export default function ParcialesPage() {
     })
   }
 
+  const toggleJustificada = (fecha: string) => {
+    setSuccess(false)
+    setError(null)
+    setJustificadas((prev) => {
+      const next = { ...prev }
+      if (fecha in next) delete next[fecha]
+      else next[fecha] = { motivo: '', invalidada: false }
+      return next
+    })
+  }
+
+  const cambiarMotivo = (fecha: string, motivo: string) => {
+    setSuccess(false)
+    setError(null)
+    setJustificadas((prev) => ({
+      ...prev,
+      [fecha]: { ...prev[fecha], motivo },
+    }))
+  }
+
+  const toggleInvalidada = (fecha: string) => {
+    setSuccess(false)
+    setError(null)
+    setJustificadas((prev) => ({
+      ...prev,
+      [fecha]: { ...prev[fecha], invalidada: !prev[fecha].invalidada },
+    }))
+  }
+
   const validate = (): string | null => {
     for (const p of PARCIALES) {
       const { fecha_inicio, fecha_fin, dias_semana } = form[p]
@@ -282,8 +380,18 @@ export default function ParcialesPage() {
       if (dias_semana.length === 0) {
         return `El Parcial ${p} debe tener al menos un dia de clase marcado.`
       }
-      if (contarClases(fecha_inicio, fecha_fin, dias_semana) === 0) {
+      if (fechasPorParcial[p].length === 0) {
         return `En el Parcial ${p} no cae ninguna clase: el rango no incluye ningun ${nombresDias(dias_semana)}.`
+      }
+      // Sin clases contables nadie podria sumar: el parcial daria 0 puntos a todos.
+      if (clasesPorParcial[p] === 0) {
+        return `En el Parcial ${p} estan invalidadas todas las clases. Debe quedar al menos una para repartir los puntos de asistencia.`
+      }
+      const sinMotivo = fechasPorParcial[p].find(
+        (f) => f in justificadas && !justificadas[f].motivo.trim(),
+      )
+      if (sinMotivo) {
+        return `Escribe el motivo de la clase del ${formatFechaCorta(sinMotivo)} (Parcial ${p}).`
       }
     }
     if (form[1].fecha_fin >= form[2].fecha_inicio) {
@@ -322,6 +430,39 @@ export default function ParcialesPage() {
 
       if (upsertError) throw upsertError
 
+      // Solo sobreviven las justificadas que siguen siendo una clase del rango:
+      // si se movieron las fechas, una vieja no debe reaparecer mas adelante.
+      const vigentes = PARCIALES.flatMap((p) => fechasPorParcial[p]).filter(
+        (f) => f in justificadas,
+      )
+      const aBorrar = justificadasEnBD.filter((f) => !vigentes.includes(f))
+
+      if (vigentes.length > 0) {
+        const { error: justificarError } = await supabase
+          .from('clases_justificadas')
+          .upsert(
+            vigentes.map((fecha) => ({
+              fecha,
+              motivo: justificadas[fecha].motivo.trim(),
+              invalidada: justificadas[fecha].invalidada,
+            })),
+            { onConflict: 'fecha' },
+          )
+        if (justificarError) throw justificarError
+      }
+
+      if (aBorrar.length > 0) {
+        const { error: borrarError } = await supabase
+          .from('clases_justificadas')
+          .delete()
+          .in('fecha', aBorrar)
+        if (borrarError) throw borrarError
+      }
+
+      setJustificadasEnBD(vigentes)
+      setJustificadas(
+        Object.fromEntries(vigentes.map((f) => [f, justificadas[f]])),
+      )
       setSuccess(true)
     } catch (err) {
       console.error(err)
@@ -372,7 +513,10 @@ export default function ParcialesPage() {
           <p className="text-sm text-muted-foreground">
             El total de clases se calcula por calendario: cuantas veces cae el
             dia de clase dentro del rango. Una clase cuenta aunque nadie haya
-            asistido o aunque todavia no haya ocurrido. La asistencia se reparte{' '}
+            asistido o aunque todavia no haya ocurrido, salvo que la invalides:
+            una clase invalidada no cuenta en el total ni vale puntos. Para
+            invalidarla primero debes justificarla con un motivo. La asistencia
+            se reparte{' '}
             <strong>
               {topes[1]} + {topes[2]} + {topes[3]} ={' '}
               {topes[1] + topes[2] + topes[3]} pts
@@ -380,6 +524,20 @@ export default function ParcialesPage() {
             entre los parciales.
           </p>
         </div>
+
+        {clasesSinAsistencia.length > 0 && (
+          <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2.5 rounded-lg mb-3">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              Hay <strong>{clasesSinAsistencia.length}</strong> clase(s) ya
+              pasada(s) sin asistencia registrada (
+              {clasesSinAsistencia.slice(0, 4).map(formatFechaCorta).join(', ')}
+              {clasesSinAsistencia.length > 4 ? '...' : ''}). Siguen contando en
+              el total y bajan la nota de todos: si no se dictaron, justificalas
+              e invalidalas.
+            </span>
+          </div>
+        )}
 
         {fueraDeRango.length > 0 && (
           <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-3 py-2.5 rounded-lg mb-3">
@@ -483,6 +641,107 @@ export default function ParcialesPage() {
                   </div>
                 </div>
 
+                {fechasPorParcial[p].length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Clases del parcial</Label>
+                    {fechasPorParcial[p].length > MAX_CLASES_VISIBLES ? (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        El rango tiene demasiadas clases. Revisa las fechas.
+                      </p>
+                    ) : (
+                      <ul className="max-h-64 space-y-1 overflow-y-auto pr-1">
+                        {fechasPorParcial[p].map((fecha) => {
+                          const justificacion = justificadas[fecha]
+                          const justificada = Boolean(justificacion)
+                          const invalidada = justificacion?.invalidada ?? false
+                          const conRegistros = fechasConRegistros.has(fecha)
+                          return (
+                            <li
+                              key={fecha}
+                              className="rounded-md border border-border px-2 py-1.5"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="min-w-0 text-xs">
+                                  <p
+                                    className={
+                                      invalidada
+                                        ? 'text-muted-foreground line-through'
+                                        : 'font-medium'
+                                    }
+                                  >
+                                    {NOMBRE_DIA[diaSemanaDe(fecha)].slice(0, 3)}{' '}
+                                    {formatFechaCorta(fecha)}
+                                  </p>
+                                  {invalidada ? (
+                                    <p className="text-amber-600 dark:text-amber-400">
+                                      {conRegistros
+                                        ? 'Invalidada: su asistencia no cuenta'
+                                        : 'Invalidada: no cuenta'}
+                                    </p>
+                                  ) : justificada ? (
+                                    <p className="text-muted-foreground">
+                                      Justificada: sigue contando
+                                    </p>
+                                  ) : conRegistros ? (
+                                    <p className="text-muted-foreground">
+                                      Con asistencia
+                                    </p>
+                                  ) : fecha < hoyISO() ? (
+                                    <p className="text-amber-600 dark:text-amber-400">
+                                      Sin asistencia
+                                    </p>
+                                  ) : (
+                                    <p className="text-muted-foreground">
+                                      Programada
+                                    </p>
+                                  )}
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="xs"
+                                  variant={justificada ? 'secondary' : 'outline'}
+                                  aria-pressed={justificada}
+                                  disabled={saving}
+                                  onClick={() => toggleJustificada(fecha)}
+                                >
+                                  {justificada ? 'Quitar' : 'Justificar'}
+                                </Button>
+                              </div>
+                              {justificacion && (
+                                <div className="mt-1.5 space-y-1.5">
+                                  <Input
+                                    aria-label={`Motivo de la clase del ${formatFechaCorta(fecha)}`}
+                                    placeholder="Motivo (obligatorio)"
+                                    maxLength={200}
+                                    value={justificacion.motivo}
+                                    onChange={(e) =>
+                                      cambiarMotivo(fecha, e.target.value)
+                                    }
+                                    disabled={saving}
+                                    className="h-7 text-xs"
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="xs"
+                                    variant={invalidada ? 'destructive' : 'outline'}
+                                    aria-pressed={invalidada}
+                                    title="Una clase invalidada no cuenta en el total ni vale puntos"
+                                    disabled={saving || !justificacion.motivo.trim()}
+                                    onClick={() => toggleInvalidada(fecha)}
+                                    className="w-full"
+                                  >
+                                    {invalidada ? 'Volver a contar' : 'Invalidar'}
+                                  </Button>
+                                </div>
+                              )}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
                 <p className="text-xs text-muted-foreground border-t pt-2">
                   {form[p].dias_semana.length === 0 ? (
                     <span className="text-amber-600 dark:text-amber-400">
@@ -497,7 +756,9 @@ export default function ParcialesPage() {
                       <strong className="text-foreground">
                         {clasesPorParcial[p]}
                       </strong>{' '}
-                      clase(s) en este rango
+                      clase(s) cuentan
+                      {fechasPorParcial[p].length > clasesPorParcial[p] &&
+                        ` (de ${fechasPorParcial[p].length} programadas, ${fechasPorParcial[p].length - clasesPorParcial[p]} invalidada(s))`}
                     </>
                   )}
                 </p>
