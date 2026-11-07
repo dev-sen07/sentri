@@ -127,8 +127,13 @@ export function mensajeDeResultado(proporcion: number): string {
   if (proporcion >= 1) return '¡Perfecto! Lo lograste todo.'
   if (proporcion >= 0.7) return '¡Excelente trabajo!'
   if (proporcion >= 0.5) return '¡Bien hecho! Vas por buen camino.'
-  if (proporcion > 0) return '¡Buen esfuerzo! Cada intento suma.'
-  return 'No te rindas, la próxima irá mejor.'
+  if (proporcion > 0) return '¡Buen esfuerzo! Sigue estudiando.'
+  return 'No te rindas, sigue practicando.'
+}
+
+/** Porcentaje de aciertos, que es lo que define la nota: 100% = todos los puntos. */
+export function porcentajeAciertos(correctas: number, total: number): number {
+  return total > 0 ? Math.round((correctas / total) * 100) : 0
 }
 
 /** 90 -> '01:30'; 3700 -> '1:01:40' */

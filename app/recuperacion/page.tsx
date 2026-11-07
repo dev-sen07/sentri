@@ -9,6 +9,7 @@ import {
   mensajeDePregunta,
   mensajeDeProgreso,
   mensajeDeResultado,
+  porcentajeAciertos,
 } from '@/lib/recuperacion'
 import { CompaneroAnimo, Confeti } from '@/components/companero-animo'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -485,7 +486,7 @@ function Examen({
       <AlertDialog open={confirmar} onOpenChange={setConfirmar}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Finalizar esta oportunidad?</AlertDialogTitle>
+            <AlertDialogTitle>¿Finalizar la recuperación?</AlertDialogTitle>
             <AlertDialogDescription>
               {sinResponder > 0
                 ? `Te faltan ${sinResponder} pregunta(s) por responder y contarán como incorrectas. `
@@ -622,8 +623,9 @@ export default function RecuperacionPage() {
               {mensajeDeResultado(proporcion)}
             </p>
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              {resultado.titulo} · oportunidad {resultado.numero} de{' '}
-              {resultado.max_intentos}
+              {resultado.titulo}
+              {resultado.max_intentos > 1 &&
+                ` · oportunidad ${resultado.numero} de ${resultado.max_intentos}`}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -637,7 +639,8 @@ export default function RecuperacionPage() {
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {resultado.correctas} de {resultado.total_preguntas} respuestas
-                correctas
+                correctas (
+                {porcentajeAciertos(resultado.correctas, resultado.total_preguntas)}%)
               </p>
             </div>
             {(resultado.rechazadas ?? 0) > 0 && (
@@ -646,19 +649,21 @@ export default function RecuperacionPage() {
                 tiempo y no se contaron.
               </p>
             )}
-            <p className="rounded-lg bg-muted px-3 py-2 text-sm">
-              Tu nota es la mejor de tus oportunidades:{' '}
-              <strong className="tabular-nums">
-                {Number(resultado.mejor_puntos).toFixed(2)} pts
-              </strong>
-              .
-              {quedan > 0 && !notaPerfecta && (
-                <>
-                  {' '}
-                  Te queda {quedan} oportunidad{quedan > 1 ? 'es' : ''}.
-                </>
-              )}
-            </p>
+            {resultado.max_intentos > 1 && (
+              <p className="rounded-lg bg-muted px-3 py-2 text-sm">
+                Tu nota es la mejor de tus oportunidades:{' '}
+                <strong className="tabular-nums">
+                  {Number(resultado.mejor_puntos).toFixed(2)} pts
+                </strong>
+                .
+                {quedan > 0 && !notaPerfecta && (
+                  <>
+                    {' '}
+                    Te queda {quedan} oportunidad{quedan > 1 ? 'es' : ''}.
+                  </>
+                )}
+              </p>
+            )}
             <Button onClick={() => void volverALista()} className="w-full">
               Volver
             </Button>
@@ -680,8 +685,8 @@ export default function RecuperacionPage() {
           </h1>
         </div>
         <p className="ml-11 text-sm text-muted-foreground sm:ml-14">
-          Cuestionarios de selección múltiple con tiempo límite. Cuenta tu mejor
-          nota.
+          Cuestionarios de selección múltiple con tiempo límite. Tu nota depende
+          del porcentaje de aciertos: con el 100% obtienes todos los puntos.
         </p>
       </div>
 
@@ -712,9 +717,15 @@ export default function RecuperacionPage() {
                         min · vale {Number(item.puntos).toFixed(2)} pts
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Oportunidades usadas: {usadas} de {item.max_intentos}
-                        {item.mejor_puntos !== null &&
-                          ` · tu mejor nota: ${Number(item.mejor_puntos).toFixed(2)} pts`}
+                        {item.max_intentos > 1
+                          ? `Oportunidades usadas: ${usadas} de ${item.max_intentos}${
+                              item.mejor_puntos !== null
+                                ? ` · tu mejor nota: ${Number(item.mejor_puntos).toFixed(2)} pts`
+                                : ''
+                            }`
+                          : usadas > 0
+                            ? 'Ya usaste tu oportunidad'
+                            : 'Tienes una sola oportunidad'}
                       </p>
                     </div>
                   </div>
@@ -758,14 +769,17 @@ export default function RecuperacionPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              ¿Comenzar la oportunidad{' '}
-              {porIniciar ? Number(porIniciar.intentos_usados) + 1 : ''} de{' '}
-              {porIniciar?.max_intentos}?
+              {porIniciar && porIniciar.max_intentos > 1
+                ? `¿Comenzar la oportunidad ${Number(porIniciar.intentos_usados) + 1} de ${porIniciar.max_intentos}?`
+                : '¿Comenzar la recuperación?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               Tendrás {porIniciar?.duracion_minutos} minutos para responder{' '}
               {porIniciar?.total_preguntas} preguntas al azar. El tiempo empieza
-              ahora y no se detiene aunque cierres la página. Cuenta tu mejor nota.
+              ahora y no se detiene aunque cierres la página.{' '}
+              {porIniciar && porIniciar.max_intentos > 1
+                ? 'Cuenta tu mejor nota.'
+                : 'Tienes una sola oportunidad.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

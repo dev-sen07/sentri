@@ -9,7 +9,12 @@ import {
   RecuperacionPreguntaRow,
   RecuperacionIntentoRow,
 } from '@/lib/supabase'
-import { EJEMPLO_JSON, LETRAS, parsearPreguntas } from '@/lib/recuperacion'
+import {
+  EJEMPLO_JSON,
+  LETRAS,
+  parsearPreguntas,
+  porcentajeAciertos,
+} from '@/lib/recuperacion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -239,10 +244,8 @@ function PanelPreguntas({
               >
                 {preguntas.length} preguntas para el banco.{' '}
                 {preguntas.length < rec.preguntas_por_intento
-                  ? `No alcanzan: a cada intento le tocan ${rec.preguntas_por_intento}.`
-                  : `A cada intento le tocan ${rec.preguntas_por_intento} al azar, y cada una vale ${(
-                      Number(rec.puntos) / rec.preguntas_por_intento
-                    ).toFixed(2)} pts.`}
+                  ? `No alcanzan: a cada estudiante le tocan ${rec.preguntas_por_intento}.`
+                  : `A cada estudiante le tocan ${rec.preguntas_por_intento} al azar. El 100% de aciertos da ${Number(rec.puntos).toFixed(2)} pts.`}
               </p>
               <Button size="sm" disabled={guardando} onClick={() => void guardar()}>
                 {guardando ? 'Guardando...' : `Guardar ${preguntas.length} preguntas`}
@@ -379,7 +382,7 @@ function PanelResultados({
                 <th className="py-2 pr-3 font-medium">Paralelo</th>
                 {Array.from({ length: rec.max_intentos }, (_, n) => (
                   <th key={n} className="py-2 pr-3 font-medium">
-                    Oportunidad {n + 1}
+                    {rec.max_intentos > 1 ? `Oportunidad ${n + 1}` : 'Aciertos'}
                   </th>
                 ))}
                 <th className="py-2 pr-3 font-medium">Nota</th>
@@ -402,7 +405,7 @@ function PanelResultados({
                         {!intento ? (
                           <span className="text-muted-foreground">-</span>
                         ) : intento.finalizado_en ? (
-                          `${intento.correctas}/${intento.total_preguntas} (${Number(intento.puntos_obtenidos).toFixed(2)})`
+                          `${intento.correctas}/${intento.total_preguntas} · ${porcentajeAciertos(intento.correctas ?? 0, intento.total_preguntas ?? 0)}%`
                         ) : (
                           <span className="text-muted-foreground">En curso</span>
                         )}
@@ -437,8 +440,8 @@ function PanelResultados({
             <AlertDialogTitle>¿Reiniciar a este estudiante?</AlertDialogTitle>
             <AlertDialogDescription>
               {aReiniciar?.estudiante?.nombre} {aReiniciar?.estudiante?.apellido}{' '}
-              perderá sus respuestas y los puntos obtenidos, y volverá a tener todas
-              sus oportunidades.
+              perderá sus respuestas y los puntos obtenidos, y podrá volver a
+              rendirla.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -536,7 +539,7 @@ export default function RecuperacionAdminPage() {
       return setError('El tiempo debe ser un número entero de 1 a 600 minutos.')
     }
     if (!Number.isInteger(porIntento) || porIntento < 1) {
-      return setError('Indica cuántas preguntas le tocan a cada intento.')
+      return setError('Indica cuántas preguntas le tocan a cada estudiante.')
     }
     if (form.paralelos.length === 0) {
       return setError('Elige al menos un paralelo.')
@@ -627,8 +630,8 @@ export default function RecuperacionAdminPage() {
             </h1>
           </div>
           <p className="ml-11 text-sm text-muted-foreground sm:ml-14">
-            La nota se calcula sola: correctas / total x puntos. De sus
-            oportunidades cuenta la mejor, y se suma a los extras del estudiante.
+            La nota se calcula sola por porcentaje de aciertos: el 100% da todos los
+            puntos, el 50% la mitad. Se suma a los extras del estudiante.
           </p>
         </div>
         <Button
@@ -701,7 +704,7 @@ export default function RecuperacionAdminPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="rec-por-intento" className="text-xs">
-                  Preguntas por intento
+                  Preguntas por estudiante
                 </Label>
                 <Input
                   id="rec-por-intento"
@@ -716,6 +719,11 @@ export default function RecuperacionAdminPage() {
                 />
               </div>
             </div>
+            <p className="text-xs text-muted-foreground">
+              Cuántas preguntas del banco le salen a cada estudiante, no las
+              oportunidades (siempre es una). Con 10 preguntas, 5 aciertos son el 50%
+              de los puntos.
+            </p>
             <div className="space-y-1.5">
               <Label className="text-xs">Paralelos que pueden rendirla</Label>
               <div className="flex gap-2">
@@ -792,15 +800,15 @@ export default function RecuperacionAdminPage() {
                       </span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Banco de {rec.total_preguntas} · {rec.preguntas_por_intento}{' '}
-                      por intento · {rec.duracion_minutos} min · vale{' '}
-                      {Number(rec.puntos).toFixed(2)} pts (
-                      {(Number(rec.puntos) / rec.preguntas_por_intento).toFixed(2)}{' '}
-                      por pregunta)
+                      Banco de {rec.total_preguntas} ·{' '}
+                      {rec.preguntas_por_intento} por estudiante ·{' '}
+                      {rec.duracion_minutos} min · 100% de aciertos ={' '}
+                      {Number(rec.puntos).toFixed(2)} pts
                     </p>
                     <p className="text-sm text-muted-foreground">
                       Paralelos {rec.paralelos.join(', ')} · {rec.max_intentos}{' '}
-                      oportunidades · {rec.total_intentos} intento(s)
+                      {rec.max_intentos === 1 ? 'oportunidad' : 'oportunidades'} ·{' '}
+                      {rec.total_intentos} intento(s)
                     </p>
                     {rec.total_preguntas < rec.preguntas_por_intento && (
                       <p className="text-sm text-amber-600 dark:text-amber-400">
