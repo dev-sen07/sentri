@@ -94,6 +94,29 @@ export function actividadCerrada(fecha: string, horaFin: string | null | undefin
   return new Date() > cierre
 }
 
+/**
+ * Un instante (timestamptz), a diferencia de las fechas civiles de arriba, se
+ * muestra en el huso del usuario: '15/11/2026, 23:59'
+ */
+export function formatFechaHora(iso: string | null | undefined): string {
+  if (!iso) return '-'
+  return new Date(iso).toLocaleString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+/** Instante -> valor de un <input type="datetime-local"> (hora local, sin zona). */
+export function aInputFechaHora(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const hora = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return `${aISO(d)}T${hora}`
+}
+
 /** 'HH:MM:SS' -> 'HH:MM' */
 export function formatHora(h: string | null | undefined): string {
   return h ? h.slice(0, 5) : ''

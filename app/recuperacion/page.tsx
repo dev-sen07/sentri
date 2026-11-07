@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { formatFechaHora } from '@/lib/fecha'
 import {
   formatTiempo,
   LETRAS,
@@ -12,6 +13,7 @@ import {
   porcentajeAciertos,
 } from '@/lib/recuperacion'
 import { CompaneroAnimo, Confeti } from '@/components/companero-animo'
+import { BloqueCodigo, TextoConCodigo } from '@/components/texto-con-codigo'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -24,18 +26,27 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { AlertCircle, CheckCircle, ClipboardCheck, Clock, Eye } from 'lucide-react'
+import {
+  AlertCircle,
+  ArrowRight,
+  CalendarClock,
+  CheckCircle,
+  ClipboardCheck,
+  Clock,
+  Eye,
+} from 'lucide-react'
 
 type ItemLista = {
   id: string
   titulo: string
   puntos: number
   duracion_minutos: number
+  fecha_limite: string | null
   total_preguntas: number
   max_intentos: number
   intentos_usados: number
   mejor_puntos: number | null
-  estado: 'disponible' | 'en_curso' | 'finalizado'
+  estado: 'disponible' | 'en_curso' | 'finalizado' | 'vencida'
 }
 
 type Resultado = {
@@ -54,7 +65,8 @@ type Resultado = {
   rechazadas?: number
 }
 
-type ExamenEnCurso = {
+/** El servidor solo entrega la pregunta actual: no hay forma de ver las demás. */
+type PreguntaEnCurso = {
   estado: 'en_curso'
   intento_id: string
   titulo: string
@@ -62,64 +74,129 @@ type ExamenEnCurso = {
   numero: number
   max_intentos: number
   segundos_restantes: number
-  respuestas: Record<string, number>
-  preguntas: {
+  posicion: number
+  total_preguntas: number
+  respuesta: number | null
+  pregunta: {
     id: string
     enunciado: string
+    codigo: string | null
     /** Ya vienen barajadas. Se responde con la posición en esta lista. */
     opciones: string[]
-  }[]
+  }
 }
 
+/** Sostener el dedo más que esto es leer, no elegir. */
+const MS_TOQUE_LARGO = 300
+
 /**
- * Enunciado difuminado: se lee solo mientras el mouse está encima o, en
- * celulares, mientras se mantiene presionado (no hay hover en una pantalla
- * táctil). Con teclado se revela al enfocarlo.
+ * Inciso difuminado: se lee solo mientras el mouse está encima o, en celulares,
+ * mientras se mantiene presionado (no hay hover en una pantalla táctil). Con
+ * teclado se revela al enfocarlo.
+ *
+ * En celular leer y elegir usan el mismo dedo: un toque corto elige, y soltar
+ * después de leer no marca nada.
  *
  * Es un freno a las capturas y al copiado, no una protección real: el texto está
  * en la página y se puede leer desde las herramientas del navegador.
  */
-function PreguntaDifuminada({ texto }: { texto: string }) {
+function OpcionDifuminada({
+  nombre,
+  posicion,
+  texto,
+  marcada,
+  bloqueada,
+  onElegir,
+}: {
+  nombre: string
+  posicion: number
+  texto: string
+  marcada: boolean
+  bloqueada: boolean
+  onElegir: () => void
+}) {
   const [visible, setVisible] = useState(false)
+  const inicioToque = useRef<number | null>(null)
+  const fueLargo = useRef(false)
 
   return (
-    <div
-      tabIndex={0}
+    <label
       onPointerEnter={(e) => {
         if (e.pointerType === 'mouse') setVisible(true)
       }}
-      onPointerLeave={() => setVisible(false)}
+      onPointerLeave={() => {
+        setVisible(false)
+        inicioToque.current = null
+      }}
       onPointerDown={(e) => {
-        if (e.pointerType !== 'mouse') setVisible(true)
+        if (e.pointerType === 'mouse') return
+        inicioToque.current = Date.now()
+        fueLargo.current = false
+        setVisible(true)
       }}
       onPointerUp={(e) => {
-        if (e.pointerType !== 'mouse') setVisible(false)
+        if (e.pointerType === 'mouse') return
+        fueLargo.current =
+          inicioToque.current !== null &&
+          Date.now() - inicioToque.current >= MS_TOQUE_LARGO
+        inicioToque.current = null
+        setVisible(false)
       }}
       // Al arrastrar para hacer scroll el navegador cancela el toque: se oculta.
-      onPointerCancel={() => setVisible(false)}
-      onFocus={(e) => {
-        if (e.currentTarget.matches(':focus-visible')) setVisible(true)
+      onPointerCancel={() => {
+        inicioToque.current = null
+        setVisible(false)
       }}
-      onBlur={() => setVisible(false)}
+      onClick={(e) => {
+        if (fueLargo.current) {
+          fueLargo.current = false
+          e.preventDefault()
+        }
+      }}
       // El toque largo abre el menú de copiar en los celulares.
       onContextMenu={(e) => e.preventDefault()}
       onCopy={(e) => e.preventDefault()}
-      className="cursor-default touch-pan-y select-none rounded-lg outline-none [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-ring"
+      className={`flex min-h-11 cursor-pointer touch-pan-y select-none items-center gap-3 rounded-lg border px-3 py-2 text-sm transition-colors [-webkit-touch-callout:none] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${
+        marcada
+          ? 'border-primary bg-primary/10 font-medium'
+          : 'border-border hover:bg-muted'
+      } ${bloqueada ? 'pointer-events-none opacity-60' : ''}`}
     >
-      <p
-        data-visible={visible}
-        className={`font-medium leading-relaxed transition-[filter] duration-150 ${
-          visible ? '' : 'blur-[7px]'
+      <input
+        type="radio"
+        name={nombre}
+        className="sr-only"
+        checked={marcada}
+        disabled={bloqueada}
+        onChange={onElegir}
+        onFocus={(e) => {
+          if (e.currentTarget.matches(':focus-visible')) setVisible(true)
+        }}
+        onBlur={() => setVisible(false)}
+      />
+      <span
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold ${
+          marcada
+            ? 'border-primary bg-primary text-primary-foreground'
+            : 'border-border text-muted-foreground'
         }`}
       >
-        {texto}
-      </p>
-    </div>
+        {LETRAS[posicion]}
+      </span>
+      <div
+        data-visible={visible}
+        className={`min-w-0 flex-1 transition-[filter] duration-150 ${
+          visible ? '' : 'blur-[6px]'
+        }`}
+      >
+        <TextoConCodigo texto={texto} />
+      </div>
+    </label>
   )
 }
 
 /**
- * Compañero de una pregunta. Salta al responder, pero el mensaje es el mismo
+ * Compañero de la pregunta. Salta al responder, pero el mensaje es el mismo
  * sea la respuesta correcta o no: no debe servir de pista.
  */
 function AnimoDePregunta({
@@ -127,9 +204,9 @@ function AnimoDePregunta({
   respuesta,
 }: {
   indice: number
-  respuesta: number | undefined
+  respuesta: number | null
 }) {
-  const respondida = respuesta !== undefined
+  const respondida = respuesta !== null
   return (
     <div className="flex items-end gap-2 pt-1">
       {/* key: cambiar de opción repite el salto */}
@@ -141,6 +218,7 @@ function AnimoDePregunta({
       />
       <p
         key={respondida ? 'despues' : 'antes'}
+        data-animo
         className="relative mb-1.5 animate-[comp-burbuja_0.25s_ease-out] rounded-xl rounded-bl-sm bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground"
       >
         {mensajeDePregunta(indice, respondida)}
@@ -150,78 +228,75 @@ function AnimoDePregunta({
 }
 
 /**
- * Respuestas que quedaron sin confirmar en este dispositivo (recarga o reinicio
- * con mala señal). El servidor las vuelve a validar al enviarlas.
+ * Respuesta que quedó sin confirmar en este dispositivo (recarga o reinicio con
+ * mala señal). El servidor la vuelve a validar al enviarla.
  */
-function leerPendientes(
-  clave: string,
-  preguntas: ExamenEnCurso['preguntas'],
-): Record<string, number> {
+function leerPendiente(clave: string, preguntaId: string): number | null {
   try {
-    const datos = JSON.parse(localStorage.getItem(clave) ?? '{}') as Record<
-      string,
-      unknown
-    >
-    const validas: Record<string, number> = {}
-    preguntas.forEach((p) => {
-      const opcion = datos[p.id]
-      if (Number.isInteger(opcion) && (opcion as number) >= 0 && (opcion as number) <= 3) {
-        validas[p.id] = opcion as number
-      }
-    })
-    return validas
+    const datos = JSON.parse(localStorage.getItem(clave) ?? '{}') as {
+      pregunta?: string
+      opcion?: unknown
+    }
+    const { opcion } = datos
+    return datos.pregunta === preguntaId &&
+      Number.isInteger(opcion) &&
+      (opcion as number) >= 0 &&
+      (opcion as number) <= 3
+      ? (opcion as number)
+      : null
   } catch {
-    return {}
+    return null
   }
 }
 
 function Examen({
-  examen,
+  inicial,
   onResultado,
 }: {
-  examen: ExamenEnCurso
+  inicial: PreguntaEnCurso
   onResultado: (r: Resultado) => void
 }) {
-  const clavePendientes = `recuperacion:${examen.intento_id}:pendientes`
-  const [respuestas, setRespuestas] = useState(() => ({
-    ...(examen.respuestas ?? {}),
-    ...leerPendientes(clavePendientes, examen.preguntas),
-  }))
-  const [restante, setRestante] = useState(examen.segundos_restantes)
+  const intentoId = inicial.intento_id
+  const clavePendiente = `recuperacion:${intentoId}:pendiente`
+
+  const [actual, setActual] = useState(inicial)
+  const [marcada, setMarcada] = useState<number | null>(
+    () => leerPendiente(clavePendiente, inicial.pregunta.id) ?? inicial.respuesta,
+  )
+  const [restante, setRestante] = useState(inicial.segundos_restantes)
   const [finalizando, setFinalizando] = useState(false)
+  const [avanzando, setAvanzando] = useState(false)
   const [errorGuardado, setErrorGuardado] = useState(false)
   const [errorFinal, setErrorFinal] = useState<string | null>(null)
-  const [confirmar, setConfirmar] = useState(false)
+  const [confirmar, setConfirmar] = useState<'pasar' | 'finalizar' | null>(null)
 
-  // Respuestas marcadas que aún no confirmó el servidor.
-  const pendientes = useRef(new Map<string, number>())
+  // Respuesta marcada que aún no confirmó el servidor.
+  const pendiente = useRef<{ pregunta: string; opcion: number } | null>(null)
   const vaciando = useRef<Promise<void> | null>(null)
   const terminando = useRef(false)
   const rechazadas = useRef(0)
-  const intentoId = examen.intento_id
+  const tarjeta = useRef<HTMLElement | null>(null)
 
-  /** Copia las pendientes al dispositivo: recargar no debe perderlas. */
+  /** Copia la pendiente al dispositivo: recargar no debe perderla. */
   const persistir = useCallback(() => {
     try {
-      if (pendientes.current.size === 0) localStorage.removeItem(clavePendientes)
-      else {
-        localStorage.setItem(
-          clavePendientes,
-          JSON.stringify(Object.fromEntries(pendientes.current)),
-        )
+      if (pendiente.current) {
+        localStorage.setItem(clavePendiente, JSON.stringify(pendiente.current))
+      } else {
+        localStorage.removeItem(clavePendiente)
       }
     } catch {
       // Sin almacenamiento (modo privado) solo se pierde este respaldo.
     }
-  }, [clavePendientes])
+  }, [clavePendiente])
 
-  /** Envía las pendientes de una en una. Si falla la red, quedan para reintentar. */
+  /** Envía la pendiente. Si falla la red, queda para reintentar. */
   const vaciar = useCallback((): Promise<void> => {
     if (vaciando.current) return vaciando.current
 
     const tarea = (async () => {
-      while (pendientes.current.size > 0) {
-        const [pregunta, opcion] = [...pendientes.current.entries()][0]
+      while (pendiente.current) {
+        const { pregunta, opcion } = pendiente.current
         const { data, error } = await supabase.rpc('responder_recuperacion', {
           p_intento: intentoId,
           p_pregunta: pregunta,
@@ -231,18 +306,31 @@ function Examen({
           setErrorGuardado(true)
           return
         }
+        if (data === 'otra_pregunta') {
+          // Avanzó desde otra pestaña: esta ya no es la pregunta actual.
+          pendiente.current = null
+          persistir()
+          setErrorGuardado(false)
+          setErrorFinal(
+            'Avanzaste desde otra pestaña o dispositivo. Recarga la página para continuar.',
+          )
+          return
+        }
         if (data !== 'guardado') {
-          // Ya no se aceptan: se cuentan para avisarle junto con la nota, porque
-          // en pantalla siguen marcadas.
-          rechazadas.current += pendientes.current.size
-          pendientes.current.clear()
+          // Ya no se acepta: se cuenta para avisarle junto con la nota, porque
+          // en pantalla sigue marcada.
+          rechazadas.current += 1
+          pendiente.current = null
           persistir()
           setErrorGuardado(false)
           return
         }
         // Si cambió de opción mientras viajaba, la nueva sigue pendiente.
-        if (pendientes.current.get(pregunta) === opcion) {
-          pendientes.current.delete(pregunta)
+        if (
+          pendiente.current?.pregunta === pregunta &&
+          pendiente.current.opcion === opcion
+        ) {
+          pendiente.current = null
           persistir()
         }
       }
@@ -258,13 +346,14 @@ function Examen({
   // Reenvía lo que quedó sin confirmar en una visita anterior.
   useEffect(() => {
     const init = async () => {
-      Object.entries(leerPendientes(clavePendientes, examen.preguntas)).forEach(
-        ([pregunta, opcion]) => pendientes.current.set(pregunta, opcion),
-      )
+      const opcion = leerPendiente(clavePendiente, inicial.pregunta.id)
+      if (opcion !== null) {
+        pendiente.current = { pregunta: inicial.pregunta.id, opcion }
+      }
       await vaciar()
     }
     init()
-  }, [clavePendientes, examen.preguntas, vaciar])
+  }, [clavePendiente, inicial.pregunta.id, vaciar])
 
   const terminar = useCallback(
     async (tiempoAgotado: boolean) => {
@@ -275,13 +364,13 @@ function Examen({
 
       await vaciar()
 
-      // Terminando a mano no se califica con respuestas sin guardar. Si se acabó
-      // el tiempo sí: el servidor ya no aceptaría más.
-      if (!tiempoAgotado && pendientes.current.size > 0) {
+      // Terminando a mano no se califica con una respuesta sin guardar. Si se
+      // acabó el tiempo sí: el servidor ya no aceptaría más.
+      if (!tiempoAgotado && pendiente.current) {
         terminando.current = false
         setFinalizando(false)
         setErrorFinal(
-          'Hay respuestas sin guardar. Revisa tu conexión y vuelve a intentarlo.',
+          'Tu respuesta no se guardó. Revisa tu conexión y vuelve a intentarlo.',
         )
         return
       }
@@ -307,40 +396,74 @@ function Examen({
   // Se calcula contra una hora fija, no restando 1: los celulares frenan los
   // intervalos con la pantalla apagada y el contador se atrasaría.
   useEffect(() => {
-    const fin = Date.now() + examen.segundos_restantes * 1000
+    const fin = Date.now() + inicial.segundos_restantes * 1000
     const id = setInterval(() => {
       const r = Math.max(0, Math.ceil((fin - Date.now()) / 1000))
       setRestante(r)
       if (r === 0) void terminar(true)
     }, 1000)
     return () => clearInterval(id)
-  }, [examen.segundos_restantes, terminar])
+  }, [inicial.segundos_restantes, terminar])
 
-  const elegir = (pregunta: string, opcion: number) => {
-    setRespuestas((prev) => ({ ...prev, [pregunta]: opcion }))
-    pendientes.current.set(pregunta, opcion)
+  const elegir = (opcion: number) => {
+    setMarcada(opcion)
+    pendiente.current = { pregunta: actual.pregunta.id, opcion }
     persistir()
     void vaciar()
   }
 
-  const total = examen.preguntas.length
-  const respondidas = examen.preguntas.filter(
-    (p) => respuestas[p.id] !== undefined,
-  ).length
-  const sinResponder = total - respondidas
-  const bloqueado = finalizando || restante === 0
-  const avance = total > 0 ? (respondidas / total) * 100 : 0
+  /** Pasa a la siguiente sin vuelta atrás. Primero debe quedar guardada la actual. */
+  const siguiente = async () => {
+    if (avanzando) return
+    setAvanzando(true)
+    setErrorFinal(null)
+    try {
+      await vaciar()
+      if (pendiente.current) {
+        setErrorFinal(
+          'Tu respuesta no se guardó. Revisa tu conexión y vuelve a intentarlo.',
+        )
+        return
+      }
+      const { data, error } = await supabase.rpc('avanzar_recuperacion', {
+        p_intento: intentoId,
+        p_posicion: actual.posicion,
+      })
+      if (error) {
+        setErrorFinal('No se pudo avanzar. Revisa tu conexión y vuelve a intentarlo.')
+        return
+      }
+      const r = data as PreguntaEnCurso | Resultado | { estado: 'vencido' }
+      if (r.estado === 'vencido') {
+        await terminar(true)
+      } else if (r.estado === 'finalizado') {
+        onResultado({ ...r, rechazadas: rechazadas.current })
+      } else {
+        setActual(r)
+        setMarcada(r.respuesta)
+        tarjeta.current?.scrollIntoView({ block: 'nearest' })
+      }
+    } finally {
+      setAvanzando(false)
+    }
+  }
+
+  const total = actual.total_preguntas
+  const esUltima = actual.posicion >= total - 1
+  const bloqueado = finalizando || avanzando || restante === 0
+  const avance =
+    total > 0 ? ((actual.posicion + (marcada !== null ? 1 : 0)) / total) * 100 : 0
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 pb-8">
       <div className="sticky top-0 z-10 -mx-4 mb-4 border-b border-border bg-background/95 px-4 pb-3 pt-3 backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{examen.titulo}</p>
+            <p className="truncate text-sm font-semibold">{actual.titulo}</p>
             <p className="truncate text-xs text-muted-foreground">
-              {examen.max_intentos > 1 &&
-                `Oportunidad ${examen.numero} de ${examen.max_intentos} · `}
-              {respondidas} de {total} respondidas
+              {actual.max_intentos > 1 &&
+                `Oportunidad ${actual.numero} de ${actual.max_intentos} · `}
+              Pregunta {actual.posicion + 1} de {total}
             </p>
           </div>
           <div
@@ -358,23 +481,24 @@ function Examen({
         </div>
 
         <p className="mt-1 text-xs font-medium text-primary">
-          {mensajeDeProgreso(respondidas, total, restante)}
+          {mensajeDeProgreso(actual.posicion, total, restante)}
         </p>
 
-        {/* El compañero camina por la barra a medida que se responde. */}
+        {/* El compañero camina por la barra a medida que se avanza. */}
         <div className="relative mt-6 h-1.5 rounded-full bg-muted">
           <div
             className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
             style={{ width: `${avance}%` }}
           />
           <div
+            data-caminante
             className="absolute -top-[26px] -translate-x-1/2 transition-[left] duration-500 ease-out"
             style={{ left: `clamp(14px, ${avance}%, calc(100% - 14px))` }}
           >
             <CompaneroAnimo
-              key={respondidas}
+              key={`${actual.posicion}-${marcada ?? 'x'}`}
               indice={0}
-              feliz={respondidas > 0}
+              feliz={avance > 0}
               className="h-7 w-7"
             />
           </div>
@@ -385,15 +509,16 @@ function Examen({
         <Eye className="mt-0.5 h-5 w-5 shrink-0 text-info" />
         <p className="text-sm text-muted-foreground">
           <span className="pointer-coarse:hidden">
-            Las preguntas están difuminadas: pasa el mouse sobre cada una para
-            leerla.
+            Los incisos están difuminados: pasa el mouse sobre cada uno para leerlo.
           </span>
           <span className="hidden pointer-coarse:inline">
-            Las preguntas están difuminadas: mantén presionada cada una con el
-            dedo para leerla.
+            Los incisos están difuminados: mantén presionado cada uno para leerlo y
+            dale un toque corto para elegirlo.
           </span>{' '}
-          Cada respuesta se guarda al marcarla. El tiempo sigue corriendo aunque
-          cierres la página.
+          <strong className="font-semibold">
+            No podrás volver a las preguntas anteriores.
+          </strong>{' '}
+          El tiempo sigue corriendo aunque cierres la página.
         </p>
       </div>
 
@@ -401,7 +526,7 @@ function Examen({
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span className="flex-1">
-            No se pudo guardar tu última respuesta. Revisa tu conexión.
+            No se pudo guardar tu respuesta. Revisa tu conexión.
           </span>
           <Button size="xs" variant="outline" onClick={() => void vaciar()}>
             Reintentar
@@ -409,59 +534,44 @@ function Examen({
         </div>
       )}
 
-      <ol className="space-y-3">
-        {examen.preguntas.map((p, i) => (
-          <li key={p.id}>
-            <Card className="border-border shadow-sm">
-              <CardContent className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
-                    {i + 1}
-                  </span>
-                  <div className="min-w-0 flex-1 pt-0.5">
-                    <PreguntaDifuminada texto={p.enunciado} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {p.opciones.map((opcion, pos) => {
-                    const marcada = respuestas[p.id] === pos
-                    return (
-                      <label
-                        key={pos}
-                        className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${
-                          marcada
-                            ? 'border-primary bg-primary/10 font-medium'
-                            : 'border-border hover:bg-muted'
-                        } ${bloqueado ? 'pointer-events-none opacity-60' : ''}`}
-                      >
-                        <input
-                          type="radio"
-                          name={p.id}
-                          className="sr-only"
-                          checked={marcada}
-                          disabled={bloqueado}
-                          onChange={() => elegir(p.id, pos)}
-                        />
-                        <span
-                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-xs font-semibold ${
-                            marcada
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-border text-muted-foreground'
-                          }`}
-                        >
-                          {LETRAS[pos]}
-                        </span>
-                        <span className="min-w-0 break-words">{opcion}</span>
-                      </label>
-                    )
-                  })}
-                </div>
-                <AnimoDePregunta indice={i} respuesta={respuestas[p.id]} />
-              </CardContent>
-            </Card>
-          </li>
-        ))}
-      </ol>
+      <section
+        ref={tarjeta}
+        // key: la pregunta nueva entra animada y sin rastros de la anterior.
+        key={actual.pregunta.id}
+        className="scroll-mt-32 animate-[comp-burbuja_0.25s_ease-out]"
+      >
+        <Card className="border-border shadow-sm">
+          <CardContent className="space-y-3">
+            <div className="flex items-start gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
+                {actual.posicion + 1}
+              </span>
+              <TextoConCodigo
+                data-enunciado
+                texto={actual.pregunta.enunciado}
+                className="flex-1 pt-0.5 font-medium leading-relaxed"
+              />
+            </div>
+            {actual.pregunta.codigo && (
+              <BloqueCodigo codigo={actual.pregunta.codigo} />
+            )}
+            <div className="space-y-2">
+              {actual.pregunta.opciones.map((opcion, pos) => (
+                <OpcionDifuminada
+                  key={pos}
+                  nombre={actual.pregunta.id}
+                  posicion={pos}
+                  texto={opcion}
+                  marcada={marcada === pos}
+                  bloqueada={bloqueado}
+                  onElegir={() => elegir(pos)}
+                />
+              ))}
+            </div>
+            <AnimoDePregunta indice={actual.posicion} respuesta={marcada} />
+          </CardContent>
+        </Card>
+      </section>
 
       {errorFinal && (
         <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-600 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
@@ -471,33 +581,65 @@ function Examen({
       )}
 
       <div className="mt-4 flex justify-end">
-        <Button
-          onClick={() =>
-            restante === 0 ? void terminar(true) : setConfirmar(true)
-          }
-          disabled={finalizando}
-          className="w-full gap-2 sm:w-auto"
-        >
-          <CheckCircle className="h-4 w-4" />
-          {finalizando ? 'Finalizando...' : 'Finalizar recuperación'}
-        </Button>
+        {esUltima ? (
+          <Button
+            onClick={() =>
+              restante === 0 ? void terminar(true) : setConfirmar('finalizar')
+            }
+            disabled={finalizando || avanzando}
+            className="w-full gap-2 sm:w-auto"
+          >
+            <CheckCircle className="h-4 w-4" />
+            {finalizando ? 'Finalizando...' : 'Finalizar'}
+          </Button>
+        ) : (
+          <Button
+            onClick={() =>
+              marcada === null ? setConfirmar('pasar') : void siguiente()
+            }
+            disabled={bloqueado}
+            className="w-full gap-2 sm:w-auto"
+          >
+            {avanzando ? 'Guardando...' : 'Siguiente'}
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
-      <AlertDialog open={confirmar} onOpenChange={setConfirmar}>
+      <AlertDialog
+        open={confirmar !== null}
+        onOpenChange={(abierto) => {
+          if (!abierto) setConfirmar(null)
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Finalizar la recuperación?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {confirmar === 'pasar'
+                ? '¿Pasar sin responder?'
+                : '¿Finalizar la recuperación?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {sinResponder > 0
-                ? `Te faltan ${sinResponder} pregunta(s) por responder y contarán como incorrectas. `
-                : ''}
-              Después no podrás cambiar tus respuestas.
+              {confirmar === 'pasar'
+                ? 'Esta pregunta contará como incorrecta y no podrás volver a ella.'
+                : `${
+                    marcada === null
+                      ? 'Esta última pregunta contará como incorrecta. '
+                      : ''
+                  }Después no podrás cambiar tus respuestas.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Seguir respondiendo</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void terminar(false)}>
-              Finalizar
+            <AlertDialogCancel>
+              {confirmar === 'pasar' ? 'Quedarme aquí' : 'Seguir respondiendo'}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (confirmar === 'pasar') void siguiente()
+                else void terminar(false)
+              }}
+            >
+              {confirmar === 'pasar' ? 'Pasar' : 'Finalizar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -513,7 +655,7 @@ export default function RecuperacionPage() {
   const [error, setError] = useState<string | null>(null)
   const [iniciando, setIniciando] = useState<string | null>(null)
   const [porIniciar, setPorIniciar] = useState<ItemLista | null>(null)
-  const [examen, setExamen] = useState<ExamenEnCurso | null>(null)
+  const [examen, setExamen] = useState<PreguntaEnCurso | null>(null)
   const [resultado, setResultado] = useState<Resultado | null>(null)
 
   const cargarLista = useCallback(async () => {
@@ -572,9 +714,10 @@ export default function RecuperacionPage() {
     setIniciando(null)
     if (rpcError) {
       setError(rpcError.message)
+      await cargarLista()
       return
     }
-    const r = data as ExamenEnCurso | Resultado
+    const r = data as PreguntaEnCurso | Resultado
     if (r.estado === 'en_curso') setExamen(r)
     else setResultado(r)
   }
@@ -600,7 +743,7 @@ export default function RecuperacionPage() {
     )
   }
 
-  if (examen) return <Examen examen={examen} onResultado={onResultado} />
+  if (examen) return <Examen inicial={examen} onResultado={onResultado} />
 
   if (resultado) {
     const proporcion =
@@ -716,20 +859,32 @@ export default function RecuperacionPage() {
                         {item.total_preguntas} preguntas · {item.duracion_minutos}{' '}
                         min · vale {Number(item.puntos).toFixed(2)} pts
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.max_intentos > 1
-                          ? `Oportunidades usadas: ${usadas} de ${item.max_intentos}${
-                              item.mejor_puntos !== null
-                                ? ` · tu mejor nota: ${Number(item.mejor_puntos).toFixed(2)} pts`
-                                : ''
-                            }`
-                          : usadas > 0
-                            ? 'Ya usaste tu oportunidad'
-                            : 'Tienes una sola oportunidad'}
-                      </p>
+                      {item.fecha_limite && (
+                        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+                          Hasta el {formatFechaHora(item.fecha_limite)}
+                        </p>
+                      )}
+                      {item.estado !== 'vencida' && (
+                        <p className="text-xs text-muted-foreground">
+                          {item.max_intentos > 1
+                            ? `Oportunidades usadas: ${usadas} de ${item.max_intentos}${
+                                item.mejor_puntos !== null
+                                  ? ` · tu mejor nota: ${Number(item.mejor_puntos).toFixed(2)} pts`
+                                  : ''
+                              }`
+                            : usadas > 0
+                              ? 'Ya usaste tu oportunidad'
+                              : 'Tienes una sola oportunidad'}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  {item.estado === 'finalizado' ? (
+                  {item.estado === 'vencida' ? (
+                    <p className="shrink-0 text-sm font-semibold text-muted-foreground">
+                      Plazo vencido
+                    </p>
+                  ) : item.estado === 'finalizado' ? (
                     <p className="shrink-0 text-sm font-semibold tabular-nums">
                       {Number(item.mejor_puntos ?? 0).toFixed(2)} /{' '}
                       {Number(item.puntos).toFixed(2)} pts
@@ -775,8 +930,12 @@ export default function RecuperacionPage() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               Tendrás {porIniciar?.duracion_minutos} minutos para responder{' '}
-              {porIniciar?.total_preguntas} preguntas al azar. El tiempo empieza
-              ahora y no se detiene aunque cierres la página.{' '}
+              {porIniciar?.total_preguntas} preguntas al azar, una por una y sin
+              poder volver atrás. El tiempo empieza ahora y no se detiene aunque
+              cierres la página
+              {porIniciar?.fecha_limite &&
+                `, y se corta el ${formatFechaHora(porIniciar.fecha_limite)} si ese plazo llega antes`}
+              .{' '}
               {porIniciar && porIniciar.max_intentos > 1
                 ? 'Cuenta tu mejor nota.'
                 : 'Tienes una sola oportunidad.'}

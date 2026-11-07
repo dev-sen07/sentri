@@ -9,6 +9,8 @@ import {
   RecuperacionPreguntaRow,
   RecuperacionIntentoRow,
 } from '@/lib/supabase'
+import { aInputFechaHora, formatFechaHora } from '@/lib/fecha'
+import { BloqueCodigo, TextoConCodigo } from '@/components/texto-con-codigo'
 import {
   EJEMPLO_JSON,
   LETRAS,
@@ -75,6 +77,8 @@ type Formulario = {
   duracion_minutos: string
   preguntas_por_intento: string
   paralelos: Paralelo[]
+  /** Valor de <input type="datetime-local">: hora local, sin zona. */
+  fecha_limite: string
 }
 
 const FORM_VACIO: Formulario = {
@@ -84,6 +88,7 @@ const FORM_VACIO: Formulario = {
   duracion_minutos: '',
   preguntas_por_intento: '',
   paralelos: [...PARALELOS],
+  fecha_limite: '',
 }
 
 function Aviso({ tipo, children }: { tipo: 'error' | 'ok'; children: React.ReactNode }) {
@@ -262,21 +267,24 @@ function PanelPreguntas({
         <ol className="max-h-96 space-y-2 overflow-y-auto pr-1">
           {existentes.map((p, i) => (
             <li key={p.id} className="rounded-lg border border-border px-3 py-2 text-sm">
-              <p className="font-medium">
-                {i + 1}. {p.enunciado}
-              </p>
-              <ul className="mt-1 grid gap-x-3 gap-y-0.5 text-xs text-muted-foreground sm:grid-cols-2">
+              <div className="flex gap-1.5 font-medium">
+                <span className="shrink-0">{i + 1}.</span>
+                <TextoConCodigo texto={p.enunciado} />
+              </div>
+              {p.codigo && <BloqueCodigo codigo={p.codigo} className="mt-1.5" />}
+              <ul className="mt-1.5 grid gap-x-3 gap-y-1 text-xs text-muted-foreground sm:grid-cols-2">
                 {p.opciones.map((o, idx) => (
                   <li
                     key={idx}
-                    className={
+                    className={`flex min-w-0 gap-1 ${
                       idx === p.correcta
                         ? 'font-semibold text-emerald-600 dark:text-emerald-400'
                         : ''
-                    }
+                    }`}
                   >
-                    {LETRAS[idx]}. {o}
-                    {idx === p.correcta ? ' (correcta)' : ''}
+                    <span className="shrink-0">{LETRAS[idx]}.</span>
+                    <TextoConCodigo texto={o} />
+                    {idx === p.correcta && <span className="shrink-0">(correcta)</span>}
                   </li>
                 ))}
               </ul>
@@ -544,6 +552,15 @@ export default function RecuperacionAdminPage() {
     if (form.paralelos.length === 0) {
       return setError('Elige al menos un paralelo.')
     }
+    if (!form.fecha_limite) {
+      return setError('Indica la fecha límite de entrega.')
+    }
+    // Editar el título de una ya vencida no debe exigir cambiarle la fecha.
+    const original = lista.find((r) => r.id === form.id)
+    const fechaCambio = aInputFechaHora(original?.fecha_limite) !== form.fecha_limite
+    if (fechaCambio && new Date(form.fecha_limite) <= new Date()) {
+      return setError('La fecha límite debe ser futura.')
+    }
 
     setGuardando(true)
     setError(null)
@@ -553,6 +570,8 @@ export default function RecuperacionAdminPage() {
       duracion_minutos: minutos,
       preguntas_por_intento: porIntento,
       paralelos: form.paralelos,
+      // new Date lo lee como hora local; toISOString guarda el instante correcto.
+      fecha_limite: new Date(form.fecha_limite).toISOString(),
     }
     const { error: saveError } = form.id
       ? await supabase.from('recuperaciones').update(fila).eq('id', form.id)
@@ -724,6 +743,21 @@ export default function RecuperacionAdminPage() {
               oportunidades (siempre es una). Con 10 preguntas, 5 aciertos son el 50%
               de los puntos.
             </p>
+            <div className="space-y-1.5 sm:max-w-xs">
+              <Label htmlFor="rec-fecha-limite" className="text-xs">
+                Fecha límite de entrega
+              </Label>
+              <Input
+                id="rec-fecha-limite"
+                type="datetime-local"
+                value={form.fecha_limite}
+                onChange={(e) => setForm({ ...form, fecha_limite: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Después de esta fecha nadie puede empezar, y quien esté respondiendo
+                se corta en ese momento con lo que lleve.
+              </p>
+            </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Paralelos que pueden rendirla</Label>
               <div className="flex gap-2">
@@ -810,6 +844,14 @@ export default function RecuperacionAdminPage() {
                       {rec.max_intentos === 1 ? 'oportunidad' : 'oportunidades'} ·{' '}
                       {rec.total_intentos} intento(s)
                     </p>
+                    <p className="text-sm text-muted-foreground">
+                      {rec.fecha_limite
+                        ? `Hasta el ${formatFechaHora(rec.fecha_limite)}`
+                        : 'Sin fecha límite'}
+                      {rec.fecha_limite &&
+                        new Date(rec.fecha_limite) <= new Date() &&
+                        ' · plazo vencido'}
+                    </p>
                     {rec.total_preguntas < rec.preguntas_por_intento && (
                       <p className="text-sm text-amber-600 dark:text-amber-400">
                         Faltan{' '}
@@ -864,6 +906,7 @@ export default function RecuperacionAdminPage() {
                         duracion_minutos: String(rec.duracion_minutos),
                         preguntas_por_intento: String(rec.preguntas_por_intento),
                         paralelos: rec.paralelos,
+                        fecha_limite: aInputFechaHora(rec.fecha_limite),
                       })
                     }}
                   >

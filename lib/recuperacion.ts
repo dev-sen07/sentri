@@ -5,6 +5,8 @@ export const LETRAS = ['A', 'B', 'C', 'D'] as const
 /** Pregunta lista para enviar a cargar_preguntas_recuperacion. */
 export type PreguntaCargada = {
   enunciado: string
+  /** Fragmento de código que acompaña al enunciado, con su sangría. */
+  codigo: string | null
   opciones: string[]
   /** Indice dentro de `opciones`: 0=A ... 3=D */
   correcta: number
@@ -12,8 +14,19 @@ export type PreguntaCargada = {
 
 export const EJEMPLO_JSON = `[
   {
+    "pregunta": "¿Qué imprime este código?",
+    "codigo": [
+      "def doble(x):",
+      "    return x * 2",
+      "",
+      "print(doble(4))"
+    ],
+    "opciones": ["8", "4", "\`doble(4)\`", "Error"],
+    "correcta": "A"
+  },
+  {
     "pregunta": "¿Qué comando crea una rama nueva en git?",
-    "opciones": ["git branch", "git commit", "git push", "git status"],
+    "opciones": ["\`git branch\`", "\`git commit\`", "\`git push\`", "\`git status\`"],
     "correcta": "A"
   },
   {
@@ -56,12 +69,26 @@ export function parsearPreguntas(texto: string): {
     const enunciado = typeof fila.pregunta === 'string' ? fila.pregunta.trim() : ''
     if (!enunciado) errores.push(`${n}: falta el texto en "pregunta".`)
 
+    // Una lista de líneas es más fácil de escribir en JSON que un texto con \n.
+    let codigo: string | null = null
+    if (Array.isArray(fila.codigo) && fila.codigo.every((l) => typeof l === 'string')) {
+      codigo = (fila.codigo as string[]).join('\n')
+    } else if (typeof fila.codigo === 'string') {
+      codigo = fila.codigo
+    } else if (fila.codigo !== undefined && fila.codigo !== null) {
+      errores.push(`${n}: "codigo" debe ser un texto o una lista de líneas.`)
+    }
+    if (codigo !== null && !codigo.trim()) codigo = null
+
+    // Sin trim del interior: un inciso puede ser código con sangría.
     const opciones = Array.isArray(fila.opciones)
-      ? fila.opciones.map((o) => (typeof o === 'string' ? o.trim() : ''))
+      ? fila.opciones.map((o) =>
+          typeof o === 'string' ? o.replace(/^\s*\n|\n\s*$/g, '').trimEnd() : '',
+        )
       : []
     if (opciones.length !== 4) {
       errores.push(`${n}: "opciones" debe tener exactamente 4 textos.`)
-    } else if (opciones.some((o) => !o)) {
+    } else if (opciones.some((o) => !o.trim())) {
       errores.push(`${n}: hay una opcion vacia o que no es texto.`)
     } else if (new Set(opciones).size !== 4) {
       errores.push(`${n}: hay opciones repetidas.`)
@@ -74,7 +101,7 @@ export function parsearPreguntas(texto: string): {
       errores.push(`${n}: "correcta" debe ser "A", "B", "C" o "D".`)
     }
 
-    if (errores.length === antes) preguntas.push({ enunciado, opciones, correcta })
+    if (errores.length === antes) preguntas.push({ enunciado, codigo, opciones, correcta })
   })
 
   return { preguntas: errores.length > 0 ? [] : preguntas, errores }
@@ -110,15 +137,14 @@ export function mensajeDePregunta(indice: number, respondida: boolean): string {
 }
 
 export function mensajeDeProgreso(
-  respondidas: number,
+  posicion: number,
   total: number,
   segundos: number,
 ): string {
   if (segundos <= 60) return '¡Último minuto! Confía en ti.'
-  if (respondidas === 0) return '¡Empecemos! Tú puedes.'
-  if (respondidas === total) return '¡Todas respondidas! Revisa y finaliza.'
-  if (respondidas === total - 1) return '¡Solo te falta una!'
-  if (respondidas >= total / 2) return '¡Ya pasaste la mitad!'
+  if (total > 1 && posicion === total - 1) return '¡Última pregunta!'
+  if (posicion === 0) return '¡Empecemos! Tú puedes.'
+  if (posicion >= total / 2) return '¡Ya pasaste la mitad!'
   return '¡Buen comienzo, sigue así!'
 }
 

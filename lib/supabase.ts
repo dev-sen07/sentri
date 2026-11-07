@@ -212,6 +212,8 @@ export type RecuperacionRow = {
   preguntas_por_intento: number
   paralelos: ('A' | 'B' | 'C')[]
   max_intentos: number
+  /** Después de esta fecha nadie puede empezar. */
+  fecha_limite: string | null
   activa: boolean
   creado_en: string
 }
@@ -222,6 +224,7 @@ export type RecuperacionPreguntaRow = {
   recuperacion_id: string
   orden: number
   enunciado: string
+  codigo: string | null
   opciones: string[]
   correcta: number
 }
