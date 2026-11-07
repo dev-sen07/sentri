@@ -16,6 +16,7 @@ import {
   LogOut,
   Code,
   CalendarDays,
+  ClipboardCheck,
 } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
@@ -63,6 +64,7 @@ const AUXILIAR_NAV: NavGroup[] = [
       { title: 'Marcar Asistencia', url: '/marcar-asistencia', icon: CheckSquare, color: 'text-chart-3' },
       { title: 'Extras', url: '/extras', icon: Star, color: 'text-chart-4' },
       { title: 'Parciales', url: '/parciales', icon: CalendarDays, color: 'text-info' },
+      { title: 'Recuperación', url: '/recuperacion/admin', icon: ClipboardCheck, color: 'text-chart-2' },
     ],
   },
   {
@@ -93,6 +95,7 @@ const ESTUDIANTE_NAV: NavGroup[] = [
     items: [
       { title: 'Mis Asistencias', url: '/mis-asistencias', icon: History, color: 'text-chart-3' },
       { title: 'Prácticas', url: '/practicas', icon: Code, color: 'text-info' },
+      { title: 'Recuperación', url: '/recuperacion', icon: ClipboardCheck, color: 'text-chart-2' },
       { title: 'Clases Grabadas', url: '/clases-grabadas', icon: Video, color: 'text-chart-5' },
     ],
   },

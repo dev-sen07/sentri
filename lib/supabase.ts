@@ -203,6 +203,42 @@ export type ClaseJustificadaRow = {
   creado_en: string
 }
 
+export type RecuperacionRow = {
+  id: string
+  titulo: string
+  puntos: number
+  duracion_minutos: number
+  /** Cuantas preguntas del banco le tocan a cada intento. */
+  preguntas_por_intento: number
+  paralelos: ('A' | 'B' | 'C')[]
+  max_intentos: number
+  activa: boolean
+  creado_en: string
+}
+
+/** Solo visible para el auxiliar: el estudiante nunca recibe `correcta`. */
+export type RecuperacionPreguntaRow = {
+  id: string
+  recuperacion_id: string
+  orden: number
+  enunciado: string
+  opciones: string[]
+  correcta: number
+}
+
+export type RecuperacionIntentoRow = {
+  id: string
+  recuperacion_id: string
+  estudiante_id: string
+  numero: number
+  iniciado_en: string
+  vence_en: string
+  finalizado_en: string | null
+  correctas: number | null
+  total_preguntas: number | null
+  puntos_obtenidos: number | null
+}
+
 export type VistaCalificacionesParcialRow = {
   estudiante_id: string
   parcial: 1 | 2 | 3

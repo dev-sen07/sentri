@@ -24,6 +24,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/reporte-estudiantes': 'Reporte de Estudiantes',
   '/reporte-liberacion': 'Reporte de Liberación',
   '/parciales': 'Configurar Parciales',
+  '/recuperacion': 'Recuperación',
+  '/recuperacion/admin': 'Recuperación · Admin',
 }
 
 function getPageTitle(path: string) {
