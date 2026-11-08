@@ -79,6 +79,8 @@ type Formulario = {
   paralelos: Paralelo[]
   /** Valor de <input type="datetime-local">: hora local, sin zona. */
   fecha_limite: string
+  /** '' = según la fecha en que se rinde */
+  parcial: '' | '1' | '2' | '3'
 }
 
 const FORM_VACIO: Formulario = {
@@ -89,6 +91,7 @@ const FORM_VACIO: Formulario = {
   preguntas_por_intento: '',
   paralelos: [...PARALELOS],
   fecha_limite: '',
+  parcial: '',
 }
 
 function Aviso({ tipo, children }: { tipo: 'error' | 'ok'; children: React.ReactNode }) {
@@ -572,6 +575,7 @@ export default function RecuperacionAdminPage() {
       paralelos: form.paralelos,
       // new Date lo lee como hora local; toISOString guarda el instante correcto.
       fecha_limite: new Date(form.fecha_limite).toISOString(),
+      parcial: form.parcial ? Number(form.parcial) : null,
     }
     const { error: saveError } = form.id
       ? await supabase.from('recuperaciones').update(fila).eq('id', form.id)
@@ -758,6 +762,28 @@ export default function RecuperacionAdminPage() {
                 se corta en ese momento con lo que lleve.
               </p>
             </div>
+            <div className="space-y-1.5 sm:max-w-xs">
+              <Label htmlFor="rec-parcial" className="text-xs">
+                Suma al parcial
+              </Label>
+              <select
+                id="rec-parcial"
+                value={form.parcial}
+                onChange={(e) =>
+                  setForm({ ...form, parcial: e.target.value as Formulario['parcial'] })
+                }
+                className="h-9 w-full rounded-xl border border-input bg-input/30 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <option value="">Según la fecha en que se rinde</option>
+                <option value="1">Parcial 1</option>
+                <option value="2">Parcial 2</option>
+                <option value="3">Parcial 3</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Llena ese parcial hasta su tope, contando lo que el estudiante ya
+                tenía. Lo que sobre pasa al parcial siguiente.
+              </p>
+            </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Paralelos que pueden rendirla</Label>
               <div className="flex gap-2">
@@ -845,6 +871,9 @@ export default function RecuperacionAdminPage() {
                       {rec.total_intentos} intento(s)
                     </p>
                     <p className="text-sm text-muted-foreground">
+                      {rec.parcial
+                        ? `Suma al Parcial ${rec.parcial} (excedente al siguiente) · `
+                        : 'Suma al parcial de la fecha en que se rinde · '}
                       {rec.fecha_limite
                         ? `Hasta el ${formatFechaHora(rec.fecha_limite)}`
                         : 'Sin fecha límite'}
@@ -907,6 +936,9 @@ export default function RecuperacionAdminPage() {
                         preguntas_por_intento: String(rec.preguntas_por_intento),
                         paralelos: rec.paralelos,
                         fecha_limite: aInputFechaHora(rec.fecha_limite),
+                        parcial: rec.parcial
+                          ? (String(rec.parcial) as Formulario['parcial'])
+                          : '',
                       })
                     }}
                   >

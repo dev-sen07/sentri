@@ -214,6 +214,8 @@ export type RecuperacionRow = {
   max_intentos: number
   /** Después de esta fecha nadie puede empezar. */
   fecha_limite: string | null
+  /** Parcial al que suma, hasta su tope; el excedente va al siguiente. null = por fecha. */
+  parcial: 1 | 2 | 3 | null
   activa: boolean
   creado_en: string
 }
